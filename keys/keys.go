@@ -2,9 +2,17 @@ package keys
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/x509"
 	"encoding/hex"
 )
+
+func Generate() (*ecdsa.PrivateKey, *ecdsa.PublicKey) {
+	privateKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	publicKey := &privateKey.PublicKey
+	return privateKey, publicKey
+}
 
 func Encode(privateKey *ecdsa.PrivateKey, publicKey *ecdsa.PublicKey) (string, string) {
 	privateKeyBytes, _ := x509.MarshalECPrivateKey(privateKey)
