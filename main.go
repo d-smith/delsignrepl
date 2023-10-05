@@ -1,12 +1,14 @@
 package main
 
 import (
-	"crypto/ecdsa"
-	"crypto/sha256"
+	"bytes"
+	"delsignrepl/api"
 	"delsignrepl/keys"
 	"delsignrepl/state"
 	"delsignrepl/token"
-	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net/http"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -44,6 +46,29 @@ func doKeyGeneration(pages *tview.Pages) {
 	pages.SwitchToPage("Keygen")
 }
 
+func postKeyReg(keyReg api.KeyReg) error {
+
+	keyRegJSON, err := json.Marshal(keyReg)
+	if err != nil {
+		return err
+	}
+	bodyReader := bytes.NewReader(keyRegJSON)
+	req, err := http.NewRequest(http.MethodPost, "http://localhost:3010/api/v1/keyreg", bodyReader)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+state.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("error registering key")
+	}
+
+	return nil
+}
+
 func doKeyRegistration(pages *tview.Pages) {
 	keyGenView := createRegisterTextView(pages)
 	keyGenView.Write([]byte("\nRegistering your key...\n"))
@@ -58,16 +83,18 @@ func doKeyRegistration(pages *tview.Pages) {
 		sig := keys.Sign(email.(string), state.PrivateKey)
 		keyGenView.Write([]byte("Signature: " + sig + "\n"))
 
-		hash := sha256.Sum256([]byte(email.(string)))
-		decodedSig, _ := hex.DecodeString(sig)
-		valid := ecdsa.VerifyASN1(&state.PrivateKey.PublicKey, hash[:], decodedSig)
-		if valid {
-			keyGenView.Write([]byte("Signature verified\n"))
-		} else {
-			keyGenView.Write([]byte("Signature not verified\n"))
+		keyReg := api.KeyReg{Email: email.(string),
+			PubKey:                   state.PublicKeyDER,
+			SignatureForRegistration: sig,
 		}
 
-		keyGenView.Write([]byte("Registered.\n"))
+		err = postKeyReg(keyReg)
+		if err != nil {
+			keyGenView.Write([]byte("Error: " + err.Error() + "\n"))
+		} else {
+
+			keyGenView.Write([]byte("Registered.\n"))
+		}
 	}
 
 	keyGenView.Write([]byte("\nPress m to return to the main menu\n"))
