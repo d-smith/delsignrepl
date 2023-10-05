@@ -4,8 +4,10 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"fmt"
 )
 
 func Generate() (*ecdsa.PrivateKey, *ecdsa.PublicKey) {
@@ -28,4 +30,18 @@ func Decode(privateKeyString string, publicKeyString string) (*ecdsa.PrivateKey,
 	privateKey, _ := x509.ParseECPrivateKey(privateKeyBytes)
 	publicKey, _ := x509.ParsePKIXPublicKey(publicKeyBytes)
 	return privateKey, publicKey.(*ecdsa.PublicKey)
+}
+
+func Sign(msg string, privateKey *ecdsa.PrivateKey) string {
+	hash := sha256.Sum256([]byte(msg))
+
+	sig, err := ecdsa.SignASN1(rand.Reader, privateKey, hash[:])
+	if err != nil {
+		panic(err) // TODO - consider the merits of robust error handling
+	}
+
+	valid := ecdsa.VerifyASN1(&privateKey.PublicKey, hash[:], sig)
+	fmt.Println("signature verified:", valid)
+
+	return hex.EncodeToString(sig)
 }

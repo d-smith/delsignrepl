@@ -1,8 +1,12 @@
 package main
 
 import (
+	"crypto/ecdsa"
+	"crypto/sha256"
 	"delsignrepl/keys"
 	"delsignrepl/state"
+	"delsignrepl/token"
+	"encoding/hex"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -29,7 +33,7 @@ func doKeyGeneration(pages *tview.Pages) {
 	priv, pub := keys.Generate()
 	privEnc, pubEnc := keys.Encode(priv, pub)
 
-	state.PrivateKeyDER = privEnc
+	state.PrivateKey = priv
 	state.PublicKeyDER = pubEnc
 
 	keyGenView.Write([]byte("Private key: " + privEnc + "\n"))
@@ -44,7 +48,28 @@ func doKeyRegistration(pages *tview.Pages) {
 	keyGenView := createRegisterTextView(pages)
 	keyGenView.Write([]byte("\nRegistering your key...\n"))
 	keyGenView.Write([]byte("PubKey: " + state.PublicKeyDER + "\n"))
-	keyGenView.Write([]byte("Registered.\n"))
+
+	email, err := token.ExtractEmailFromToken(state.Token, "secret")
+	if err != nil {
+		keyGenView.Write([]byte("Error: " + err.Error() + "\n"))
+	} else {
+
+		keyGenView.Write([]byte("Email: " + email.(string) + "\n"))
+		sig := keys.Sign(email.(string), state.PrivateKey)
+		keyGenView.Write([]byte("Signature: " + sig + "\n"))
+
+		hash := sha256.Sum256([]byte(email.(string)))
+		decodedSig, _ := hex.DecodeString(sig)
+		valid := ecdsa.VerifyASN1(&state.PrivateKey.PublicKey, hash[:], decodedSig)
+		if valid {
+			keyGenView.Write([]byte("Signature verified\n"))
+		} else {
+			keyGenView.Write([]byte("Signature not verified\n"))
+		}
+
+		keyGenView.Write([]byte("Registered.\n"))
+	}
+
 	keyGenView.Write([]byte("\nPress m to return to the main menu\n"))
 
 	pages.AddPage("Keygen", keyGenView, true, false)

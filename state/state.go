@@ -1,5 +1,7 @@
 package state
 
+import "crypto/ecdsa"
+
 var Token string
-var PrivateKeyDER string
+var PrivateKey *ecdsa.PrivateKey
 var PublicKeyDER string
