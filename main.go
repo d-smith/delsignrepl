@@ -69,6 +69,45 @@ func postKeyReg(keyReg api.KeyReg) error {
 	return nil
 }
 
+func postWalletRequest() (int, error) {
+	req, err := http.NewRequest(http.MethodPost, "http://localhost:3010/api/v1/wallets", nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+state.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+
+	if resp.StatusCode != 201 {
+		return 0, fmt.Errorf("error generating wallet")
+	}
+
+	var walletInfo api.WalletInfo
+	err = json.NewDecoder(resp.Body).Decode(&walletInfo)
+	if err != nil {
+		return 0, err
+	}
+
+	return walletInfo.ID, nil
+}
+
+func doGenerateWallet(pages *tview.Pages) {
+	walletGenView := createWalletGenTextView(pages)
+	walletGenView.Write([]byte("\nGenerating wallet...\n"))
+	id, err := postWalletRequest()
+	if err != nil {
+		walletGenView.Write([]byte("Error: " + err.Error() + "\n"))
+	} else {
+		walletGenView.Write([]byte(fmt.Sprintf("Wallet ID: %d\n", id)))
+	}
+
+	walletGenView.Write([]byte("\nPress m to return to the main menu\n"))
+
+	pages.AddPage("WalletGen", walletGenView, true, false)
+	pages.SwitchToPage("WalletGen")
+}
+
 func doKeyRegistration(pages *tview.Pages) {
 	keyGenView := createRegisterTextView(pages)
 	keyGenView.Write([]byte("\nRegistering your key...\n"))
@@ -107,6 +146,7 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 	menuList := tview.NewList().
 		AddItem("Generate key", "Generate a key for signing API requests", 'k', nil).
 		AddItem("Register key", "Register API signing key", 'r', nil).
+		AddItem("Create wallet", "Create a wallet", 'w', nil).
 		AddItem("Quit", "Exit", 'q', nil)
 
 	menuList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -116,6 +156,8 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 			doKeyRegistration(pages)
 		} else if event.Rune() == 113 {
 			app.Stop()
+		} else if event.Rune() == 119 {
+			doGenerateWallet(pages)
 		}
 		return event
 	})
@@ -125,6 +167,18 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 
 func createKeyGenTextView(pages *tview.Pages) *tview.TextView {
 	textView := tview.NewTextView().SetText("Key generation")
+	textView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Rune() == 109 {
+			pages.SwitchToPage("Menu")
+		}
+		return event
+	})
+
+	return textView
+}
+
+func createWalletGenTextView(pages *tview.Pages) *tview.TextView {
+	textView := tview.NewTextView().SetText("Wallet generation")
 	textView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Rune() == 109 {
 			pages.SwitchToPage("Menu")
