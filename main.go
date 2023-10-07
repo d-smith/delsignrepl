@@ -43,12 +43,25 @@ func getWallets() ([]int, error) {
 
 func genAddressForm(pages *tview.Pages) {
 	wallets, _ := getWallets()
+	selection := 0
 	form := tview.NewForm().
 		AddDropDown("Select an option (hit Enter): ", intsToStrings(wallets), 0,
 			func(val string, idx int) {
+				selection = idx
 			}).
 		AddButton("Save", func() {
-			pages.SwitchToPage("Menu")
+			modal := tview.NewModal().
+				SetText(fmt.Sprintf("New address for wallet %d is 0x001",
+					wallets[selection])).
+				AddButtons([]string{"OK"}).
+				SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+					if buttonLabel == "OK" {
+						pages.SwitchToPage("Menu")
+					}
+				})
+
+			pages.AddPage("NewAddress", modal, true, false)
+			pages.SwitchToPage("NewAddress")
 		}).
 		AddButton("Cancel", func() {
 			pages.SwitchToPage("Menu")
