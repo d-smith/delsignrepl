@@ -29,6 +29,35 @@ func getTokenInputForm(pages *tview.Pages, app *tview.Application) *tview.Form {
 	return form
 }
 
+func intsToStrings(ints []int) []string {
+	strings := make([]string, len(ints))
+	for i, v := range ints {
+		strings[i] = fmt.Sprintf("%d", v)
+	}
+	return strings
+}
+
+func getWallets() ([]int, error) {
+	return []int{1, 2, 3}, nil
+}
+
+func genAddressForm(pages *tview.Pages) {
+	wallets, _ := getWallets()
+	form := tview.NewForm().
+		AddDropDown("Select an option (hit Enter): ", intsToStrings(wallets), 0,
+			func(val string, idx int) {
+			}).
+		AddButton("Save", func() {
+			pages.SwitchToPage("Menu")
+		}).
+		AddButton("Cancel", func() {
+			pages.SwitchToPage("Menu")
+		})
+	form.SetBorder(true).SetTitle("Select wallet for address gen").SetTitleAlign(tview.AlignLeft)
+	pages.AddPage("Address Gen", form, true, false)
+	pages.SwitchToPage("Address Gen")
+}
+
 func doKeyGeneration(pages *tview.Pages) {
 	keyGenView := createKeyGenTextView(pages)
 	keyGenView.Write([]byte("\nGenerating your key...\n"))
@@ -147,6 +176,7 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 		AddItem("Generate key", "Generate a key for signing API requests", 'k', nil).
 		AddItem("Register key", "Register API signing key", 'r', nil).
 		AddItem("Create wallet", "Create a wallet", 'w', nil).
+		AddItem("Generate address", "Generate an address for a wallet", 'a', nil).
 		AddItem("Quit", "Exit", 'q', nil)
 
 	menuList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -158,6 +188,8 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 			app.Stop()
 		} else if event.Rune() == 119 {
 			doGenerateWallet(pages)
+		} else if event.Rune() == 97 {
+			genAddressForm(pages)
 		}
 		return event
 	})
