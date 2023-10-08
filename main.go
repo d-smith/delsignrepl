@@ -38,7 +38,25 @@ func intsToStrings(ints []int) []string {
 }
 
 func getWallets() ([]int, error) {
-	return []int{1, 2, 3}, nil
+	var wallets []int
+	req, err := http.NewRequest(http.MethodGet, "http://localhost:3010/api/v1/wallets", nil)
+	req.Header.Set("Authorization", "Bearer "+state.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return wallets, err
+	}
+
+	if resp.StatusCode != 201 {
+		return wallets, fmt.Errorf("error generating wallet")
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&wallets)
+	if err != nil {
+		return wallets, err
+	}
+
+	return wallets, nil
 }
 
 func genAddressForm(pages *tview.Pages) {
