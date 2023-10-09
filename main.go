@@ -30,6 +30,43 @@ func getTokenInputForm(pages *tview.Pages, app *tview.Application) *tview.Form {
 	return form
 }
 
+func doSendForm(pages *tview.Pages) {
+	destination := tview.NewInputField().
+		SetLabel("Destination address: ").
+		SetFieldWidth(60).
+		SetAcceptanceFunc(tview.InputFieldMaxLength(60))
+
+	amount := tview.NewInputField().
+		SetLabel("Amount (in Wei): ").
+		SetFieldWidth(60).
+		SetAcceptanceFunc(tview.InputFieldInteger)
+
+	source := tview.NewInputField().
+		SetLabel("Source address: ").
+		SetFieldWidth(60).
+		SetText(state.Address).
+		SetAcceptanceFunc(func(s string, lc rune) bool {
+			return false
+		})
+
+	form := tview.NewForm().
+		//AddTextView("Source Address", state.Address, 0, 0, false, false).
+		AddFormItem(source).
+		AddFormItem(destination).
+		AddFormItem(amount).
+		AddButton("Save", func() {
+			pages.SwitchToPage("Menu")
+		}).
+		AddButton("Cancel", func() {
+			pages.SwitchToPage("Menu")
+		})
+	form.SetFocus(1)
+	form.SetBorder(true).SetTitle("Send ETH").SetTitleAlign(tview.AlignLeft)
+
+	pages.AddPage("SendEth", form, true, false)
+	pages.SwitchToPage("SendEth")
+}
+
 func intsToStrings(ints []int) []string {
 	strings := make([]string, len(ints))
 	for i, v := range ints {
@@ -374,6 +411,7 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 		AddItem("Generate address", "Generate an address for a wallet", 'a', nil).
 		AddItem("Set wallet/address context", "Set wallet/address context", 'c', nil).
 		AddItem("Get balance", "Get balance for current wallet", 'b', nil).
+		AddItem("Send ETH", "Send ETH from current wallet", 's', nil).
 		AddItem("Quit", "Exit", 'q', nil)
 
 	menuList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -391,6 +429,8 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 			doSetWalletAndAccountCtx(pages)
 		} else if event.Rune() == 'b' {
 			doGetBalance(pages)
+		} else if event.Rune() == 's' {
+			doSendForm(pages)
 		}
 		return event
 	})
