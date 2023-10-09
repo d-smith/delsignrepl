@@ -68,15 +68,30 @@ func genAddressForm(pages *tview.Pages) {
 				selection = idx
 			}).
 		AddButton("Save", func() {
-			modal := tview.NewModal().
-				SetText(fmt.Sprintf("New address for wallet %d is 0x001",
-					wallets[selection])).
-				AddButtons([]string{"OK"}).
-				SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-					if buttonLabel == "OK" {
-						pages.SwitchToPage("Menu")
-					}
-				})
+			var modal *tview.Modal
+			address, err := createWalletAddress(wallets[selection])
+			if err != nil {
+				modal = tview.NewModal().
+					SetText(fmt.Sprintf("Error creating address for wallet: %s",
+						err.Error())).
+					AddButtons([]string{"OK"}).
+					SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+						if buttonLabel == "OK" {
+							pages.SwitchToPage("Menu")
+						}
+					})
+			} else {
+
+				modal = tview.NewModal().
+					SetText(fmt.Sprintf("New address for wallet %d is %s",
+						wallets[selection], address)).
+					AddButtons([]string{"OK"}).
+					SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+						if buttonLabel == "OK" {
+							pages.SwitchToPage("Menu")
+						}
+					})
+			}
 
 			pages.AddPage("NewAddress", modal, true, false)
 			pages.SwitchToPage("NewAddress")
@@ -127,6 +142,32 @@ func postKeyReg(keyReg api.KeyReg) error {
 	}
 
 	return nil
+}
+
+func createWalletAddress(walletId int) (string, error) {
+	req, err := http.NewRequest(http.MethodPost, "http://localhost:3010/api/v1/wallets/"+fmt.Sprintf("%d", walletId)+"/addresses", nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+state.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != 201 {
+		return "", fmt.Errorf("error generating wallet address")
+	}
+
+	var eoa struct {
+		Address string `json:"eoa"`
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&eoa)
+	if err != nil {
+		return "", err
+	}
+
+	return eoa.Address, nil
 }
 
 func postWalletRequest() (int, error) {
