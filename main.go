@@ -59,7 +59,7 @@ func getWallets() ([]int, error) {
 	return wallets, nil
 }
 
-func genAddressForm(pages *tview.Pages) {
+func doAddressGeneration(pages *tview.Pages) {
 	wallets, _ := getWallets()
 	selection := 0
 	form := tview.NewForm().
@@ -193,7 +193,70 @@ func postWalletRequest() (int, error) {
 	return walletInfo.ID, nil
 }
 
-func doGenerateWallet(pages *tview.Pages) {
+type WalletAddressPair struct {
+	WalletId int    `json:"walletId"`
+	Address  string `json:"address"`
+}
+
+func getWalletsAndAddresses() ([]WalletAddressPair, error) {
+	var walletAddressPairs []WalletAddressPair
+	req, err := http.NewRequest(http.MethodGet, "http://localhost:3010/api/v1/walletctx", nil)
+	req.Header.Set("Authorization", "Bearer "+state.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return walletAddressPairs, err
+	}
+
+	if resp.StatusCode != 200 {
+		return walletAddressPairs, fmt.Errorf("error retrieving wallets and addresses for user")
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&walletAddressPairs)
+	if err != nil {
+		return walletAddressPairs, err
+	}
+
+	return walletAddressPairs, nil
+}
+
+func pairsToStrings(pairs []WalletAddressPair) []string {
+	strings := make([]string, len(pairs))
+	for i, v := range pairs {
+		strings[i] = fmt.Sprintf("Wallet %6d | %s", v.WalletId, v.Address)
+	}
+	return strings
+}
+
+func doSetWalletAndAccountCtx(pages *tview.Pages) {
+	selection := 0
+	walletAddressPairs, err := getWalletsAndAddresses()
+	form := tview.NewForm().
+		AddButton("Done", func() {
+			state.WalletId = walletAddressPairs[selection].WalletId
+			state.Address = walletAddressPairs[selection].Address
+			pages.SwitchToPage("Menu")
+		})
+
+	if err == nil {
+
+		form.
+			AddDropDown("Select an option (hit Enter): ", pairsToStrings(walletAddressPairs), 0,
+				func(val string, idx int) {
+					selection = idx
+				}).
+			AddTextView("Status", fmt.Sprintf("%d items to dosplay", len(walletAddressPairs)), 50, 1, true, true)
+	} else {
+		form.AddTextView("Status", err.Error(), 50, 1, true, true)
+
+	}
+
+	form.SetBorder(true).SetTitle("Select wallet and address for txn context").SetTitleAlign(tview.AlignLeft)
+	pages.AddPage("SetCtx", form, true, false)
+	pages.SwitchToPage("SetCtx")
+}
+
+func doWalletGeneration(pages *tview.Pages) {
 	walletGenView := createWalletGenTextView(pages)
 	walletGenView.Write([]byte("\nGenerating wallet...\n"))
 	id, err := postWalletRequest()
@@ -249,19 +312,22 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 		AddItem("Register key", "Register API signing key", 'r', nil).
 		AddItem("Create wallet", "Create a wallet", 'w', nil).
 		AddItem("Generate address", "Generate an address for a wallet", 'a', nil).
+		AddItem("Set wallet/address context", "Set wallet/address context", 'c', nil).
 		AddItem("Quit", "Exit", 'q', nil)
 
 	menuList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Rune() == 107 {
+		if event.Rune() == 'k' {
 			doKeyGeneration(pages)
-		} else if event.Rune() == 114 {
+		} else if event.Rune() == 'r' {
 			doKeyRegistration(pages)
-		} else if event.Rune() == 113 {
+		} else if event.Rune() == 'q' {
 			app.Stop()
-		} else if event.Rune() == 119 {
-			doGenerateWallet(pages)
-		} else if event.Rune() == 97 {
-			genAddressForm(pages)
+		} else if event.Rune() == 'w' {
+			doWalletGeneration(pages)
+		} else if event.Rune() == 'a' {
+			doAddressGeneration(pages)
+		} else if event.Rune() == 'c' {
+			doSetWalletAndAccountCtx(pages)
 		}
 		return event
 	})
