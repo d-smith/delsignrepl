@@ -8,6 +8,7 @@ import (
 	"delsignrepl/token"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 
 	"github.com/gdamore/tcell/v2"
@@ -228,6 +229,65 @@ func pairsToStrings(pairs []WalletAddressPair) []string {
 	return strings
 }
 
+func getBalanceForAddress(address string) (*big.Int, error) {
+
+	req, err := http.NewRequest(http.MethodGet,
+		"http://localhost:3010/api/v1/wallets/balance/"+address, nil)
+	req.Header.Set("Authorization", "Bearer "+state.Token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("error retrieving wallets and addresses for user")
+	}
+
+	var accountBalance struct {
+		Address string   `json:"address"`
+		Amount  *big.Int `json:"amount"`
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&accountBalance)
+	if err != nil {
+		return nil, err
+	}
+
+	return accountBalance.Amount, nil
+}
+
+func doGetBalance(pages *tview.Pages) {
+	var msg string
+	if state.WalletId == 0 || state.Address == "" {
+		msg = "Wallet and address context not set"
+	} else {
+
+		balance, err := getBalanceForAddress(state.Address)
+		if err != nil {
+			msg = "Error retrieving balance: " + err.Error()
+		} else {
+			msg = fmt.Sprintf("Balance for wallet %d, address %s is %d",
+				state.WalletId, state.Address, balance)
+		}
+
+	}
+
+	modal := tview.NewModal().
+		SetText(msg).
+		AddButtons([]string{"OK"}).
+		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+			if buttonLabel == "OK" {
+				pages.SwitchToPage("Menu")
+			}
+
+		})
+
+	pages.AddPage("Balance", modal, true, false)
+	pages.SwitchToPage("Balance")
+
+}
+
 func doSetWalletAndAccountCtx(pages *tview.Pages) {
 	selection := 0
 	walletAddressPairs, err := getWalletsAndAddresses()
@@ -313,6 +373,7 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 		AddItem("Create wallet", "Create a wallet", 'w', nil).
 		AddItem("Generate address", "Generate an address for a wallet", 'a', nil).
 		AddItem("Set wallet/address context", "Set wallet/address context", 'c', nil).
+		AddItem("Get balance", "Get balance for current wallet", 'b', nil).
 		AddItem("Quit", "Exit", 'q', nil)
 
 	menuList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -328,6 +389,8 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 			doAddressGeneration(pages)
 		} else if event.Rune() == 'c' {
 			doSetWalletAndAccountCtx(pages)
+		} else if event.Rune() == 'b' {
+			doGetBalance(pages)
 		}
 		return event
 	})
