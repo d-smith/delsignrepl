@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
-	"fmt"
 )
 
 func Generate() (*ecdsa.PrivateKey, *ecdsa.PublicKey) {
@@ -39,9 +38,6 @@ func Sign(msg string, privateKey *ecdsa.PrivateKey) string {
 	if err != nil {
 		panic(err) // TODO - consider the merits of robust error handling
 	}
-
-	valid := ecdsa.VerifyASN1(&privateKey.PublicKey, hash[:], sig)
-	fmt.Println("signature verified:", valid)
 
 	return hex.EncodeToString(sig)
 }
