@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"delsignrepl/api"
 	"delsignrepl/keys"
+	"delsignrepl/send"
 	"delsignrepl/state"
 	"delsignrepl/token"
 	"encoding/json"
@@ -28,43 +29,6 @@ func getTokenInputForm(pages *tview.Pages, app *tview.Application) *tview.Form {
 		})
 	form.SetBorder(true).SetTitle("Initialize application with JWT token").SetTitleAlign(tview.AlignLeft)
 	return form
-}
-
-func doSendForm(pages *tview.Pages) {
-	destination := tview.NewInputField().
-		SetLabel("Destination address: ").
-		SetFieldWidth(60).
-		SetAcceptanceFunc(tview.InputFieldMaxLength(60))
-
-	amount := tview.NewInputField().
-		SetLabel("Amount (in Wei): ").
-		SetFieldWidth(60).
-		SetAcceptanceFunc(tview.InputFieldInteger)
-
-	source := tview.NewInputField().
-		SetLabel("Source address: ").
-		SetFieldWidth(60).
-		SetText(state.Address).
-		SetAcceptanceFunc(func(s string, lc rune) bool {
-			return false
-		})
-
-	form := tview.NewForm().
-		//AddTextView("Source Address", state.Address, 0, 0, false, false).
-		AddFormItem(source).
-		AddFormItem(destination).
-		AddFormItem(amount).
-		AddButton("Save", func() {
-			pages.SwitchToPage("Menu")
-		}).
-		AddButton("Cancel", func() {
-			pages.SwitchToPage("Menu")
-		})
-	form.SetFocus(1)
-	form.SetBorder(true).SetTitle("Send ETH").SetTitleAlign(tview.AlignLeft)
-
-	pages.AddPage("SendEth", form, true, false)
-	pages.SwitchToPage("SendEth")
 }
 
 func intsToStrings(ints []int) []string {
@@ -430,7 +394,7 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 		} else if event.Rune() == 'b' {
 			doGetBalance(pages)
 		} else if event.Rune() == 's' {
-			doSendForm(pages)
+			send.ShowSendForm(pages)
 		}
 		return event
 	})
