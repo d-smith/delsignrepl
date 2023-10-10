@@ -258,6 +258,10 @@ func getBalanceForAddress(address string) (*big.Int, error) {
 	return accountBalance.Amount, nil
 }
 
+func weiToEther(val *big.Int) *big.Int {
+	return new(big.Int).Div(val, big.NewInt(1e18))
+}
+
 func doGetBalance(pages *tview.Pages) {
 	var msg string
 	if state.WalletId == 0 || state.Address == "" {
@@ -268,8 +272,8 @@ func doGetBalance(pages *tview.Pages) {
 		if err != nil {
 			msg = "Error retrieving balance: " + err.Error()
 		} else {
-			msg = fmt.Sprintf("Balance for wallet %d, address %s is %d",
-				state.WalletId, state.Address, balance)
+			msg = fmt.Sprintf("Balance for wallet %d, address %s is %d wei (%d ether)",
+				state.WalletId, state.Address, balance, weiToEther(balance))
 		}
 
 	}
