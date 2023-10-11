@@ -16,14 +16,13 @@ import (
 func DoKeyGeneration(pages *tview.Pages) {
 
 	priv, pub := Generate()
-	privEnc, pubEnc := Encode(priv, pub)
+	_, pubEnc := Encode(priv, pub)
 
 	state.PrivateKey = priv
 	state.PublicKeyDER = pubEnc
 
 	modal := tview.NewModal().
-		SetText(fmt.Sprintf("Keys generated\nPrivate key: %s\nPublic key: %s",
-			privEnc, pubEnc)).
+		SetText(fmt.Sprintf("RSA user key pair generated.")).
 		AddButtons([]string{"OK"}).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 			if buttonLabel == "OK" {

@@ -254,6 +254,20 @@ func doGetBalance(pages *tview.Pages) {
 func doSetWalletAndAccountCtx(pages *tview.Pages) {
 	selection := 0
 	walletAddressPairs, err := getWalletsAndAddresses()
+
+	if err != nil {
+		modal := tview.NewModal().
+			SetText(fmt.Sprintf("Error retrieving wallet and address context: %s", err.Error())).
+			AddButtons([]string{"OK"}).
+			SetDoneFunc(func(_ int, _ string) {
+				pages.SwitchToPage("Menu")
+			})
+
+		pages.AddPage("CtxErr", modal, true, false)
+		pages.SwitchToPage("CtxErr")
+		return
+	}
+
 	form := tview.NewForm().
 		AddButton("Done", func() {
 			state.WalletId = walletAddressPairs[selection].WalletId
