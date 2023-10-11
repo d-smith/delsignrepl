@@ -1,9 +1,9 @@
 package state
 
-import "crypto/ecdsa"
+import "crypto/rsa"
 
 var Token string
-var PrivateKey *ecdsa.PrivateKey
+var PrivateKey *rsa.PrivateKey
 var PublicKeyDER string
 var WalletId int
 var Address string

@@ -1,16 +1,15 @@
 package keys
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"fmt"
 	"reflect"
 	"testing"
 )
 
 func TestKeyEncoding(t *testing.T) {
-	privateKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	privateKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 	publicKey := &privateKey.PublicKey
 	priv, pub := Encode(privateKey, &privateKey.PublicKey)
 	t.Log(priv)
