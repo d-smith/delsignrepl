@@ -1,12 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"delsignrepl/api"
 	"delsignrepl/keys"
 	"delsignrepl/send"
 	"delsignrepl/state"
-	"delsignrepl/token"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -104,29 +102,6 @@ func doAddressGeneration(pages *tview.Pages) {
 	form.SetBorder(true).SetTitle("Select wallet for address gen").SetTitleAlign(tview.AlignLeft)
 	pages.AddPage("Address Gen", form, true, false)
 	pages.SwitchToPage("Address Gen")
-}
-
-func postKeyReg(keyReg api.KeyReg) error {
-
-	keyRegJSON, err := json.Marshal(keyReg)
-	if err != nil {
-		return err
-	}
-	bodyReader := bytes.NewReader(keyRegJSON)
-	req, err := http.NewRequest(http.MethodPost, "http://localhost:3010/api/v1/keyreg", bodyReader)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+state.Token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("error registering key")
-	}
-
-	return nil
 }
 
 func createWalletAddress(walletId int) (string, error) {
@@ -320,40 +295,6 @@ func doWalletGeneration(pages *tview.Pages) {
 	pages.SwitchToPage("WalletGen")
 }
 
-func doKeyRegistration(pages *tview.Pages) {
-	keyGenView := createRegisterTextView(pages)
-	keyGenView.Write([]byte("\nRegistering your key...\n"))
-	keyGenView.Write([]byte("PubKey: " + state.PublicKeyDER + "\n"))
-
-	email, err := token.ExtractEmailFromToken(state.Token, "secret")
-	if err != nil {
-		keyGenView.Write([]byte("Error: " + err.Error() + "\n"))
-	} else {
-
-		keyGenView.Write([]byte("Email: " + email.(string) + "\n"))
-		sig := keys.Sign(email.(string), state.PrivateKey)
-		keyGenView.Write([]byte("Signature: " + sig + "\n"))
-
-		keyReg := api.KeyReg{Email: email.(string),
-			PubKey:                   state.PublicKeyDER,
-			SignatureForRegistration: sig,
-		}
-
-		err = postKeyReg(keyReg)
-		if err != nil {
-			keyGenView.Write([]byte("Error: " + err.Error() + "\n"))
-		} else {
-
-			keyGenView.Write([]byte("Registered.\n"))
-		}
-	}
-
-	keyGenView.Write([]byte("\nPress m to return to the main menu\n"))
-
-	pages.AddPage("Keygen", keyGenView, true, false)
-	pages.SwitchToPage("Keygen")
-}
-
 func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 	menuList := tview.NewList().
 		AddItem("Generate key", "Generate a key for signing API requests", 'k', nil).
@@ -369,7 +310,7 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 		if event.Rune() == 'k' {
 			keys.DoKeyGeneration(pages)
 		} else if event.Rune() == 'r' {
-			doKeyRegistration(pages)
+			keys.DoKeyRegistration(pages)
 		} else if event.Rune() == 'q' {
 			app.Stop()
 		} else if event.Rune() == 'w' {

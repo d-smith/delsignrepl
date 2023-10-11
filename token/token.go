@@ -15,7 +15,7 @@ func ExtractEmailFromToken(token string, signedJWTKey string) (interface{}, erro
 		return []byte(signedJWTKey), nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("invalidate token: %w", err)
+		return nil, fmt.Errorf("invalid token: %w", err)
 	}
 
 	claims, ok := tok.Claims.(jwt.MapClaims)
