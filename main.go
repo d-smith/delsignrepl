@@ -106,23 +106,6 @@ func doAddressGeneration(pages *tview.Pages) {
 	pages.SwitchToPage("Address Gen")
 }
 
-func doKeyGeneration(pages *tview.Pages) {
-	keyGenView := createKeyGenTextView(pages)
-	keyGenView.Write([]byte("\nGenerating your key...\n"))
-	priv, pub := keys.Generate()
-	privEnc, pubEnc := keys.Encode(priv, pub)
-
-	state.PrivateKey = priv
-	state.PublicKeyDER = pubEnc
-
-	keyGenView.Write([]byte("Private key: " + privEnc + "\n"))
-	keyGenView.Write([]byte("Public key: " + pubEnc + "\n"))
-	keyGenView.Write([]byte("\nPress m to return to the main menu\n"))
-
-	pages.AddPage("Keygen", keyGenView, true, false)
-	pages.SwitchToPage("Keygen")
-}
-
 func postKeyReg(keyReg api.KeyReg) error {
 
 	keyRegJSON, err := json.Marshal(keyReg)
@@ -384,7 +367,7 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 
 	menuList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Rune() == 'k' {
-			doKeyGeneration(pages)
+			keys.DoKeyGeneration(pages)
 		} else if event.Rune() == 'r' {
 			doKeyRegistration(pages)
 		} else if event.Rune() == 'q' {
@@ -404,18 +387,6 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 	})
 
 	return menuList
-}
-
-func createKeyGenTextView(pages *tview.Pages) *tview.TextView {
-	textView := tview.NewTextView().SetText("Key generation")
-	textView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Rune() == 109 {
-			pages.SwitchToPage("Menu")
-		}
-		return event
-	})
-
-	return textView
 }
 
 func createWalletGenTextView(pages *tview.Pages) *tview.TextView {
