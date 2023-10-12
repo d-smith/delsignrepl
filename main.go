@@ -5,6 +5,7 @@ import (
 	"delsignrepl/keys"
 	"delsignrepl/send"
 	"delsignrepl/state"
+	"delsignrepl/token"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -13,21 +14,6 @@ import (
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
-
-func getTokenInputForm(pages *tview.Pages, app *tview.Application) *tview.Form {
-	tokenInput := tview.NewInputField().SetLabel("Token value: ").SetFieldWidth(256).SetAcceptanceFunc(tview.InputFieldMaxLength(256))
-	form := tview.NewForm().
-		AddFormItem(tokenInput).
-		AddButton("Save", func() {
-			state.Token = tokenInput.GetText()
-			pages.SwitchToPage("Menu")
-		}).
-		AddButton("Quit", func() {
-			app.Stop()
-		})
-	form.SetBorder(true).SetTitle("Initialize application with JWT token").SetTitleAlign(tview.AlignLeft)
-	return form
-}
 
 func intsToStrings(ints []int) []string {
 	strings := make([]string, len(ints))
@@ -377,7 +363,7 @@ func main() {
 	list := getMainList(pages, app) //.SetBorder(true).SetTitle("Main list").SetTitleAlign(tview.AlignLeft)
 
 	pages.AddPage("Menu", list, true, true)
-	pages.AddPage("Add Token", getTokenInputForm(pages, app), true, true)
+	pages.AddPage("Add Token", token.GetTokenInputForm(pages, app), true, true)
 	//pages.AddPage("Keygen", createKeyGenTextView(pages), true, false)
 	//pages.AddPage("Register", createRegisterTextView(pages), true, false)
 
