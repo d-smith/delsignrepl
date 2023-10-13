@@ -87,3 +87,11 @@ func GetWalletsAndAddresses(appToken string) ([]WalletAddressPair, error) {
 
 	return walletAddressPairs, nil
 }
+
+func PairsToStrings(pairs []WalletAddressPair) []string {
+	strings := make([]string, len(pairs))
+	for i, v := range pairs {
+		strings[i] = fmt.Sprintf("Wallet %6d | %s", v.WalletId, v.Address)
+	}
+	return strings
+}
