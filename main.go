@@ -47,6 +47,20 @@ func getWallets() ([]int, error) {
 
 func doAddressGeneration(pages *tview.Pages) {
 	wallets, _ := getWallets()
+	if len(wallets) == 0 {
+		modal := tview.NewModal().
+			SetText("No wallets found. Please create a wallet first").
+			AddButtons([]string{"OK"}).
+			SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+				if buttonLabel == "OK" {
+					pages.SwitchToPage("Menu")
+				}
+			})
+		pages.AddPage("NoWallets", modal, true, false)
+		pages.SwitchToPage("NoWallets")
+		return
+	}
+
 	selection := 0
 	form := tview.NewForm().
 		AddDropDown("Select an option (hit Enter): ", intsToStrings(wallets), 0,
