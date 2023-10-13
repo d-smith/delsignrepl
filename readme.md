@@ -1,5 +1,21 @@
 # delsignrepl - Demo repl for delegated signing
 
+This project illustrates a delegated signing model. In this model, public key
+encryption, in conjunction with authentication of a user via some IDP, is
+used to establish the authenticity of API requests, some of which provide
+access to private keys used to sign transactions for accounts/addresses owned 
+by the user.
+
+In this example, the demo code generates an RSA key pair, registering the public
+key with our example backend. Wallets and addresses can be created for the user,
+who must digitally sign the request to spend from an account with their private key. On the server side, the public key registered by the user is used to verify the signature, and if it checks out the parameters passed by the user are used to construct a transaction, which is then signed by the server and broadcast to the network.
+
+The key concept is the server never has access to the user's private key, and
+can build controls and policies around the use of the private key, Of course the use will have to trust the operator of the service, but any rug pull activity is
+easily detectable on the public blockchain.
+
+
+
 ## Some useful demo context
 
 Ganache address -  0x73dA1eD554De26C467d97ADE090af6d52851745E
