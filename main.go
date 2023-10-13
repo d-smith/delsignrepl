@@ -268,10 +268,26 @@ func doSetWalletAndAccountCtx(pages *tview.Pages) {
 		return
 	}
 
+	if len(walletAddressPairs) == 0 {
+		modal := tview.NewModal().
+			SetText("No wallets and addresses found. Please create a wallet and address first").
+			AddButtons([]string{"OK"}).
+			SetDoneFunc(func(_ int, _ string) {
+				pages.SwitchToPage("Menu")
+			})
+
+		pages.AddPage("NoWallets", modal, true, false)
+		pages.SwitchToPage("NoWallets")
+		return
+	}
+
 	form := tview.NewForm().
 		AddButton("Done", func() {
 			state.WalletId = walletAddressPairs[selection].WalletId
 			state.Address = walletAddressPairs[selection].Address
+			pages.SwitchToPage("Menu")
+		}).
+		AddButton("Cancel", func() {
 			pages.SwitchToPage("Menu")
 		})
 
@@ -281,8 +297,7 @@ func doSetWalletAndAccountCtx(pages *tview.Pages) {
 			AddDropDown("Select an option (hit Enter): ", pairsToStrings(walletAddressPairs), 0,
 				func(val string, idx int) {
 					selection = idx
-				}).
-			AddTextView("Status", fmt.Sprintf("%d items to dosplay", len(walletAddressPairs)), 50, 1, true, true)
+				})
 	} else {
 		form.AddTextView("Status", err.Error(), 50, 1, true, true)
 
