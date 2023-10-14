@@ -1,11 +1,11 @@
 package main
 
 import (
-	"delsignrepl/api"
 	"delsignrepl/keys"
 	"delsignrepl/send"
 	"delsignrepl/state"
 	"delsignrepl/token"
+	"delsignrepl/wallets"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -128,29 +128,6 @@ func createWalletAddress(walletId int) (string, error) {
 	}
 
 	return eoa.Address, nil
-}
-
-func postWalletRequest() (int, error) {
-	req, err := http.NewRequest(http.MethodPost, "http://localhost:3010/api/v1/wallets", nil)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+state.Token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-
-	if resp.StatusCode != 201 {
-		return 0, fmt.Errorf("error generating wallet")
-	}
-
-	var walletInfo api.WalletInfo
-	err = json.NewDecoder(resp.Body).Decode(&walletInfo)
-	if err != nil {
-		return 0, err
-	}
-
-	return walletInfo.ID, nil
 }
 
 type WalletAddressPair struct {
@@ -308,22 +285,6 @@ func doSetWalletAndAccountCtx(pages *tview.Pages) {
 	pages.SwitchToPage("SetCtx")
 }
 
-func doWalletGeneration(pages *tview.Pages) {
-	walletGenView := createWalletGenTextView(pages)
-	walletGenView.Write([]byte("\nGenerating wallet...\n"))
-	id, err := postWalletRequest()
-	if err != nil {
-		walletGenView.Write([]byte("Error: " + err.Error() + "\n"))
-	} else {
-		walletGenView.Write([]byte(fmt.Sprintf("Wallet ID: %d\n", id)))
-	}
-
-	walletGenView.Write([]byte("\nPress m to return to the main menu\n"))
-
-	pages.AddPage("WalletGen", walletGenView, true, false)
-	pages.SwitchToPage("WalletGen")
-}
-
 func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 	menuList := tview.NewList().
 		AddItem("Generate key", "Generate a key for signing API requests", 'k', nil).
@@ -343,7 +304,7 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 		} else if event.Rune() == 'q' {
 			app.Stop()
 		} else if event.Rune() == 'w' {
-			doWalletGeneration(pages)
+			wallets.DoWalletGeneration(pages)
 		} else if event.Rune() == 'a' {
 			doAddressGeneration(pages)
 		} else if event.Rune() == 'c' {
@@ -357,18 +318,6 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 	})
 
 	return menuList
-}
-
-func createWalletGenTextView(pages *tview.Pages) *tview.TextView {
-	textView := tview.NewTextView().SetText("Wallet generation")
-	textView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Rune() == 109 {
-			pages.SwitchToPage("Menu")
-		}
-		return event
-	})
-
-	return textView
 }
 
 func createRegisterTextView(pages *tview.Pages) *tview.TextView {
