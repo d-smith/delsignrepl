@@ -14,6 +14,12 @@ The key concept is the server never has access to the user's private key, and
 can build controls and policies around the use of the private key, Of course the use will have to trust the operator of the service, but any rug pull activity is
 easily detectable on the public blockchain.
 
+Note for this model something like webauthn/passkeys could be used in a key
+generation and signup flow securely generate and store keys on the end user 
+device, and then register the public key with the backend.
+
+See [this page](https://webauthn.guide/) for more details on the flow.
+
 
 
 ## Some useful demo context
