@@ -2,7 +2,6 @@ package wallets
 
 import (
 	"delsignrepl/api"
-	"delsignrepl/state"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,10 +10,10 @@ import (
 	"github.com/rivo/tview"
 )
 
-func DoWalletGeneration(pages *tview.Pages) {
+func DoWalletGeneration(pages *tview.Pages, appToken string) {
 	walletGenView := createWalletGenTextView(pages)
 	walletGenView.Write([]byte("\nGenerating wallet...\n"))
-	id, err := postWalletRequest()
+	id, err := postWalletRequest(appToken)
 	if err != nil {
 		walletGenView.Write([]byte("Error: " + err.Error() + "\n"))
 	} else {
@@ -39,10 +38,10 @@ func createWalletGenTextView(pages *tview.Pages) *tview.TextView {
 	return textView
 }
 
-func postWalletRequest() (int, error) {
+func postWalletRequest(appToken string) (int, error) {
 	req, err := http.NewRequest(http.MethodPost, "http://localhost:3010/api/v1/wallets", nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+state.Token)
+	req.Header.Set("Authorization", "Bearer "+appToken)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -60,4 +59,31 @@ func postWalletRequest() (int, error) {
 	}
 
 	return walletInfo.ID, nil
+}
+
+type WalletAddressPair struct {
+	WalletId int    `json:"walletId"`
+	Address  string `json:"address"`
+}
+
+func GetWalletsAndAddresses(appToken string) ([]WalletAddressPair, error) {
+	var walletAddressPairs []WalletAddressPair
+	req, err := http.NewRequest(http.MethodGet, "http://localhost:3010/api/v1/walletctx", nil)
+	req.Header.Set("Authorization", "Bearer "+appToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return walletAddressPairs, err
+	}
+
+	if resp.StatusCode != 200 {
+		return walletAddressPairs, fmt.Errorf("error retrieving wallets and addresses for user")
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&walletAddressPairs)
+	if err != nil {
+		return walletAddressPairs, err
+	}
+
+	return walletAddressPairs, nil
 }

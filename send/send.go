@@ -12,7 +12,7 @@ import (
 	"github.com/rivo/tview"
 )
 
-func ShowSendForm(pages *tview.Pages) {
+func ShowSendForm(pages *tview.Pages, appToken string) {
 	destination := tview.NewInputField().
 		SetLabel("Destination address: ").
 		SetFieldWidth(60).
@@ -37,7 +37,7 @@ func ShowSendForm(pages *tview.Pages) {
 		AddFormItem(destination).
 		AddFormItem(amount).
 		AddButton("Send", func() {
-			processSendForm(pages, destination.GetText(), amount.GetText())
+			processSendForm(pages, destination.GetText(), amount.GetText(), appToken)
 		}).
 		AddButton("Cancel", func() {
 			pages.SwitchToPage("Menu")
@@ -49,10 +49,10 @@ func ShowSendForm(pages *tview.Pages) {
 	pages.SwitchToPage("SendEth")
 }
 
-func processSendForm(pages *tview.Pages, destination string, amount string) {
+func processSendForm(pages *tview.Pages, destination string, amount string, appToken string) {
 	var modal *tview.Modal
 
-	txnid, err := sendEth(destination, amount) // Source is from wallet context
+	txnid, err := sendEth(destination, amount, appToken) // Source is from wallet context
 	if err != nil {
 		modal = tview.NewModal().
 			SetText(fmt.Sprintf("Error sending ETH: %s",
@@ -83,7 +83,7 @@ type SendPayload struct {
 	SourceAddress      string   `json:"source"`
 	DestinationAddress string   `json:"dest"`
 	Amount             *big.Int `json:"amount"`
-	Signature string `json:"sig"`
+	Signature          string   `json:"sig"`
 }
 
 func formSendEthPayload(destination string, amount string) (*SendPayload, error) {
@@ -105,7 +105,7 @@ func formSendEthPayload(destination string, amount string) (*SendPayload, error)
 	}, nil
 }
 
-func sendEth(destination string, amount string) (string, error) {
+func sendEth(destination string, amount string, appToken string) (string, error) {
 	payload, err := formSendEthPayload(destination, amount)
 	if err != nil {
 		return "", err
@@ -118,7 +118,7 @@ func sendEth(destination string, amount string) (string, error) {
 	bodyReader := bytes.NewReader(payloadJson)
 	req, err := http.NewRequest(http.MethodPost, "http://localhost:3010/api/v1/wallets/send", bodyReader)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+state.Token)
+	req.Header.Set("Authorization", "Bearer "+appToken)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

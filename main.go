@@ -15,46 +15,13 @@ import (
 	"github.com/rivo/tview"
 )
 
-type WalletAddressPair struct {
-	WalletId int    `json:"walletId"`
-	Address  string `json:"address"`
-}
-
-func getWalletsAndAddresses() ([]WalletAddressPair, error) {
-	var walletAddressPairs []WalletAddressPair
-	req, err := http.NewRequest(http.MethodGet, "http://localhost:3010/api/v1/walletctx", nil)
-	req.Header.Set("Authorization", "Bearer "+state.Token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return walletAddressPairs, err
-	}
-
-	if resp.StatusCode != 200 {
-		return walletAddressPairs, fmt.Errorf("error retrieving wallets and addresses for user")
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(&walletAddressPairs)
-	if err != nil {
-		return walletAddressPairs, err
-	}
-
-	return walletAddressPairs, nil
-}
-
-func pairsToStrings(pairs []WalletAddressPair) []string {
-	strings := make([]string, len(pairs))
-	for i, v := range pairs {
-		strings[i] = fmt.Sprintf("Wallet %6d | %s", v.WalletId, v.Address)
-	}
-	return strings
-}
+var appToken string
 
 func getBalanceForAddress(address string) (*big.Int, error) {
 
 	req, err := http.NewRequest(http.MethodGet,
 		"http://localhost:3010/api/v1/wallets/balance/"+address, nil)
-	req.Header.Set("Authorization", "Bearer "+state.Token)
+	req.Header.Set("Authorization", "Bearer "+appToken)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -113,63 +80,6 @@ func doGetBalance(pages *tview.Pages) {
 
 }
 
-func doSetWalletAndAccountCtx(pages *tview.Pages) {
-	selection := 0
-	walletAddressPairs, err := getWalletsAndAddresses()
-
-	if err != nil {
-		modal := tview.NewModal().
-			SetText(fmt.Sprintf("Error retrieving wallet and address context: %s", err.Error())).
-			AddButtons([]string{"OK"}).
-			SetDoneFunc(func(_ int, _ string) {
-				pages.SwitchToPage("Menu")
-			})
-
-		pages.AddPage("CtxErr", modal, true, false)
-		pages.SwitchToPage("CtxErr")
-		return
-	}
-
-	if len(walletAddressPairs) == 0 {
-		modal := tview.NewModal().
-			SetText("No wallets and addresses found. Please create a wallet and address first").
-			AddButtons([]string{"OK"}).
-			SetDoneFunc(func(_ int, _ string) {
-				pages.SwitchToPage("Menu")
-			})
-
-		pages.AddPage("NoWallets", modal, true, false)
-		pages.SwitchToPage("NoWallets")
-		return
-	}
-
-	form := tview.NewForm().
-		AddButton("Done", func() {
-			state.WalletId = walletAddressPairs[selection].WalletId
-			state.Address = walletAddressPairs[selection].Address
-			pages.SwitchToPage("Menu")
-		}).
-		AddButton("Cancel", func() {
-			pages.SwitchToPage("Menu")
-		})
-
-	if err == nil {
-
-		form.
-			AddDropDown("Select an option (hit Enter): ", pairsToStrings(walletAddressPairs), 0,
-				func(val string, idx int) {
-					selection = idx
-				})
-	} else {
-		form.AddTextView("Status", err.Error(), 50, 1, true, true)
-
-	}
-
-	form.SetBorder(true).SetTitle("Select wallet and address for txn context").SetTitleAlign(tview.AlignLeft)
-	pages.AddPage("SetCtx", form, true, false)
-	pages.SwitchToPage("SetCtx")
-}
-
 func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 	menuList := tview.NewList().
 		AddItem("Generate key", "Generate a key for signing API requests", 'k', nil).
@@ -185,19 +95,19 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 		if event.Rune() == 'k' {
 			keys.DoKeyGeneration(pages)
 		} else if event.Rune() == 'r' {
-			keys.DoKeyRegistration(pages)
+			keys.DoKeyRegistration(pages, appToken)
 		} else if event.Rune() == 'q' {
 			app.Stop()
 		} else if event.Rune() == 'w' {
-			wallets.DoWalletGeneration(pages)
+			wallets.DoWalletGeneration(pages, appToken)
 		} else if event.Rune() == 'a' {
-			wallets.DoAddressGeneration(pages)
+			wallets.DoAddressGeneration(pages, appToken)
 		} else if event.Rune() == 'c' {
-			doSetWalletAndAccountCtx(pages)
+			state.DoSetWalletAndAccountCtx(pages, appToken)
 		} else if event.Rune() == 'b' {
 			doGetBalance(pages)
 		} else if event.Rune() == 's' {
-			send.ShowSendForm(pages)
+			send.ShowSendForm(pages, appToken)
 		}
 		return event
 	})
@@ -226,7 +136,7 @@ func main() {
 	list := getMainList(pages, app) //.SetBorder(true).SetTitle("Main list").SetTitleAlign(tview.AlignLeft)
 
 	pages.AddPage("Menu", list, true, true)
-	pages.AddPage("Add Token", token.GetTokenInputForm(pages, app), true, true)
+	pages.AddPage("Add Token", token.GetTokenInputForm(pages, app, &appToken), true, true)
 	//pages.AddPage("Keygen", createKeyGenTextView(pages), true, false)
 	//pages.AddPage("Register", createRegisterTextView(pages), true, false)
 

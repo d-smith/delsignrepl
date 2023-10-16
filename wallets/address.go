@@ -1,7 +1,6 @@
 package wallets
 
 import (
-	"delsignrepl/state"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,8 +8,8 @@ import (
 	"github.com/rivo/tview"
 )
 
-func DoAddressGeneration(pages *tview.Pages) {
-	wallets, _ := getWallets()
+func DoAddressGeneration(pages *tview.Pages, appToken string) {
+	wallets, _ := getWallets(appToken)
 	if len(wallets) == 0 {
 		modal := tview.NewModal().
 			SetText("No wallets found. Please create a wallet first").
@@ -33,7 +32,7 @@ func DoAddressGeneration(pages *tview.Pages) {
 			}).
 		AddButton("Save", func() {
 			var modal *tview.Modal
-			address, err := createWalletAddress(wallets[selection])
+			address, err := createWalletAddress(wallets[selection], appToken)
 			if err != nil {
 				modal = tview.NewModal().
 					SetText(fmt.Sprintf("Error creating address for wallet: %s",
@@ -68,10 +67,10 @@ func DoAddressGeneration(pages *tview.Pages) {
 	pages.SwitchToPage("Address Gen")
 }
 
-func getWallets() ([]int, error) {
+func getWallets(appToken string) ([]int, error) {
 	var wallets []int
 	req, err := http.NewRequest(http.MethodGet, "http://localhost:3010/api/v1/wallets", nil)
-	req.Header.Set("Authorization", "Bearer "+state.Token)
+	req.Header.Set("Authorization", "Bearer "+appToken)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -90,10 +89,10 @@ func getWallets() ([]int, error) {
 	return wallets, nil
 }
 
-func createWalletAddress(walletId int) (string, error) {
+func createWalletAddress(walletId int, appToken string) (string, error) {
 	req, err := http.NewRequest(http.MethodPost, "http://localhost:3010/api/v1/wallets/"+fmt.Sprintf("%d", walletId)+"/addresses", nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+state.Token)
+	req.Header.Set("Authorization", "Bearer "+appToken)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

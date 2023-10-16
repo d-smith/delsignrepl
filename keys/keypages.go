@@ -62,9 +62,9 @@ func doKeyRegOKModel(pages *tview.Pages) {
 	pages.SwitchToPage("KeyRegError")
 }
 
-func DoKeyRegistration(pages *tview.Pages) {
+func DoKeyRegistration(pages *tview.Pages, appToken string) {
 
-	email, err := token.ExtractEmailFromToken(state.Token, "secret")
+	email, err := token.ExtractEmailFromToken(appToken, "secret")
 	if err != nil {
 		doKeyRegErrorModel(pages, err)
 	} else {
@@ -76,7 +76,7 @@ func DoKeyRegistration(pages *tview.Pages) {
 			SignatureForRegistration: sig,
 		}
 
-		err = postKeyReg(keyReg)
+		err = postKeyReg(keyReg, appToken)
 		if err != nil {
 			doKeyRegErrorModel(pages, err)
 		} else {
@@ -98,7 +98,7 @@ func createRegisterTextView(pages *tview.Pages) *tview.TextView {
 	return textView
 }
 
-func postKeyReg(keyReg api.KeyReg) error {
+func postKeyReg(keyReg api.KeyReg, appToken string) error {
 
 	keyRegJSON, err := json.Marshal(keyReg)
 	if err != nil {
@@ -107,7 +107,7 @@ func postKeyReg(keyReg api.KeyReg) error {
 	bodyReader := bytes.NewReader(keyRegJSON)
 	req, err := http.NewRequest(http.MethodPost, "http://localhost:3010/api/v1/keyreg", bodyReader)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+state.Token)
+	req.Header.Set("Authorization", "Bearer "+appToken)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

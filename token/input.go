@@ -1,7 +1,6 @@
 package token
 
 import (
-	"delsignrepl/state"
 	"fmt"
 	"math/rand"
 	"net/mail"
@@ -51,7 +50,7 @@ func GenerateToken(ttl time.Duration, payload interface{}, secretJWTKey string) 
 	return tokenString, nil
 }
 
-func GetTokenInputForm(pages *tview.Pages, app *tview.Application) *tview.Form {
+func GetTokenInputForm(pages *tview.Pages, app *tview.Application, appToken *string) *tview.Form {
 	tokenInput := tview.NewInputField().SetLabel("Token value: ").SetFieldWidth(256).SetAcceptanceFunc(tview.InputFieldMaxLength(256))
 
 	cheatCode := tview.NewCheckbox().SetLabel("Apply Cheat Code").SetChecked(false)
@@ -89,7 +88,7 @@ func GetTokenInputForm(pages *tview.Pages, app *tview.Application) *tview.Form {
 		AddFormItem(tokenInput).
 		AddFormItem(cheatCode).
 		AddButton("Save", func() {
-			state.Token = tokenInput.GetText()
+			*appToken = tokenInput.GetText()
 			pages.SwitchToPage("Menu")
 		}).
 		AddButton("Quit", func() {
