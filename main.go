@@ -48,18 +48,6 @@ func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
 	return menuList
 }
 
-func createRegisterTextView(pages *tview.Pages) *tview.TextView {
-	textView := tview.NewTextView().SetText("Key registration")
-	textView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Rune() == 109 {
-			pages.SwitchToPage("Menu")
-		}
-		return event
-	})
-
-	return textView
-}
-
 func main() {
 
 	app := tview.NewApplication()
@@ -70,8 +58,6 @@ func main() {
 
 	pages.AddPage("Menu", list, true, true)
 	pages.AddPage("Add Token", token.GetTokenInputForm(pages, app, &appToken), true, true)
-	//pages.AddPage("Keygen", createKeyGenTextView(pages), true, false)
-	//pages.AddPage("Register", createRegisterTextView(pages), true, false)
 
 	if err := app.SetRoot(pages, true).SetFocus(pages).EnableMouse(true).Run(); err != nil {
 		panic(err)
