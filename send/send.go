@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"delsignrepl/keys"
 	"delsignrepl/state"
+	"delsignrepl/wallets"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -12,11 +13,106 @@ import (
 	"github.com/rivo/tview"
 )
 
+func handleContextNotSet(pages *tview.Pages) {
+	modal := tview.NewModal().
+		SetText("Wallet and address context not set").
+		AddButtons([]string{"OK"}).
+		SetDoneFunc(func(_ int, _ string) {
+			pages.SwitchToPage("Menu")
+		})
+
+	pages.AddPage("CtxErr", modal, true, false)
+	pages.SwitchToPage("CtxErr")
+}
+
+func handleNoWallets(pages *tview.Pages) {
+	modal := tview.NewModal().
+		SetText("No eligible addresses associated with this wallet to use as destination").
+		AddButtons([]string{"OK"}).
+		SetDoneFunc(func(_ int, _ string) {
+			pages.SwitchToPage("SendEth")
+		})
+
+	pages.AddPage("NoAddresses", modal, true, false)
+	pages.SwitchToPage("NoAddresses")
+}
+
+func filterWalletAddressPairs(pairs []wallets.WalletAddressPair, address string) []wallets.WalletAddressPair {
+	var filtered []wallets.WalletAddressPair
+	for _, pair := range pairs {
+		if pair.Address != address {
+			filtered = append(filtered, pair)
+		}
+	}
+	return filtered
+}
+
 func ShowSendForm(pages *tview.Pages, appToken string) {
+	if state.Address == "" {
+		handleContextNotSet(pages)
+		return
+	}
+
 	destination := tview.NewInputField().
 		SetLabel("Destination address: ").
 		SetFieldWidth(60).
 		SetAcceptanceFunc(tview.InputFieldMaxLength(60))
+
+	var address string
+	var selection int
+
+	walletAddress := tview.NewCheckbox().SetLabel("Use Wallet Address").SetChecked(false)
+	walletAddress.SetChangedFunc(func(checked bool) {
+		if checked {
+			walletAddressPairs, err := wallets.GetWalletsAndAddresses(appToken)
+
+			if err != nil {
+				modal := tview.NewModal().
+					SetText(fmt.Sprintf("Error retrieving wallet and address context: %s", err.Error())).
+					AddButtons([]string{"OK"}).
+					SetDoneFunc(func(_ int, _ string) {
+						pages.SwitchToPage("SendEth")
+					})
+
+				pages.AddPage("CtxErr", modal, true, false)
+				pages.SwitchToPage("CtxErr")
+				return
+			}
+
+			walletAddressPairs = filterWalletAddressPairs(walletAddressPairs, state.Address)
+			if len(walletAddressPairs) == 0 {
+				handleNoWallets(pages)
+				return
+			}
+
+			form := tview.NewForm().
+				AddButton("Done", func() {
+					address = walletAddressPairs[selection].Address
+					destination.SetText(address)
+					pages.SwitchToPage("SendEth")
+				}).
+				AddButton("Cancel", func() {
+					pages.SwitchToPage("SendEth")
+				})
+
+			if err == nil {
+
+				form.
+					AddDropDown("Select an option (hit Enter): ", wallets.PairsToStrings(walletAddressPairs), 0,
+						func(val string, idx int) {
+							selection = idx
+						})
+			} else {
+				form.AddTextView("Status", err.Error(), 50, 1, true, true)
+			}
+
+			pages.AddPage("WalletAddress", form, true, false)
+			pages.SwitchToPage("WalletAddress")
+
+		} else {
+			destination.SetText("")
+		}
+	})
 
 	amount := tview.NewInputField().
 		SetLabel("Amount (in Wei): ").
@@ -35,6 +131,7 @@ func ShowSendForm(pages *tview.Pages, appToken string) {
 		//AddTextView("Source Address", state.Address, 0, 0, false, false).
 		AddFormItem(source).
 		AddFormItem(destination).
+		AddFormItem(walletAddress).
 		AddFormItem(amount).
 		AddButton("Send", func() {
 			processSendForm(pages, destination.GetText(), amount.GetText(), appToken)

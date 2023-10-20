@@ -56,7 +56,7 @@ func DoSetWalletAndAccountCtx(pages *tview.Pages, appToken string) {
 	if err == nil {
 
 		form.
-			AddDropDown("Select an option (hit Enter): ", pairsToStrings(walletAddressPairs), 0,
+			AddDropDown("Select an option (hit Enter): ", wallets.PairsToStrings(walletAddressPairs), 0,
 				func(val string, idx int) {
 					selection = idx
 				})
@@ -68,12 +68,4 @@ func DoSetWalletAndAccountCtx(pages *tview.Pages, appToken string) {
 	form.SetBorder(true).SetTitle("Select wallet and address for txn context").SetTitleAlign(tview.AlignLeft)
 	pages.AddPage("SetCtx", form, true, false)
 	pages.SwitchToPage("SetCtx")
-}
-
-func pairsToStrings(pairs []wallets.WalletAddressPair) []string {
-	strings := make([]string, len(pairs))
-	for i, v := range pairs {
-		strings[i] = fmt.Sprintf("Wallet %6d | %s", v.WalletId, v.Address)
-	}
-	return strings
 }
