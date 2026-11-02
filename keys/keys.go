@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"errors"
 )
 
 func Generate() (*rsa.PrivateKey, *rsa.PublicKey) {
@@ -31,13 +32,18 @@ func Decode(privateKeyString string, publicKeyString string) (*rsa.PrivateKey, *
 	return privateKey, publicKey.(*rsa.PublicKey)
 }
 
-func Sign(msg string, privateKey *rsa.PrivateKey) string {
+// Sign returns the API's signature format: RSASSA-PKCS1-v1_5 with SHA-256 over the
+// UTF-8 message, as lowercase hex.
+func Sign(msg string, privateKey *rsa.PrivateKey) (string, error) {
+	if privateKey == nil {
+		return "", errors.New("no signing key: generate a key first")
+	}
 	hash := sha256.Sum256([]byte(msg))
 
 	sig, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, hash[:])
 	if err != nil {
-		panic(err) // TODO - consider the merits of robust error handling
+		return "", err
 	}
 
-	return hex.EncodeToString(sig)
+	return hex.EncodeToString(sig), nil
 }

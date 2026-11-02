@@ -69,7 +69,11 @@ func DoKeyRegistration(pages *tview.Pages, appToken string) {
 		doKeyRegErrorModel(pages, err)
 	} else {
 
-		sig := Sign(email.(string), state.PrivateKey)
+		sig, err := Sign(email.(string), state.PrivateKey)
+		if err != nil {
+			doKeyRegErrorModel(pages, err)
+			return
+		}
 
 		keyReg := api.KeyReg{Email: email.(string),
 			PubKey:                   state.PublicKeyDER,

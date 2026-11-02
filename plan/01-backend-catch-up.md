@@ -582,15 +582,23 @@ confirms the file is ignored.
 
 ### Phase 1: signing test first
 
-- [ ] `keys/vectors_test.go` as in §3, "Signing", checks 1-7.
-- [ ] Stubs, so it compiles:
+- [x] `keys/vectors_test.go` as in §3, "Signing", checks 1-7.
+- [x] Stubs, so it compiles:
   - `api.SendRequest` with the six fields and their JSON tags;
   - `api.SendMessage` returning `""`;
   - `keys.BuildKeyReg` and `send.BuildSend` returning zero values.
-- [ ] Turn `keys.Sign`'s `panic` into a returned error. Its callers change in Phases 3-4.
+- [x] Turn `keys.Sign`'s `panic` into a returned error (and refuse a nil key). Its two
+      callers (`keys/keypages.go`, `send/send.go`) now show or return the error; both are
+      rewritten in Phases 3-4.
 
 **Done when:** checks 1-3 pass for all six signatures, and checks 4-7 fail on the stubs
 and nowhere else.
+
+Result (2026-11-02): `TestVectorSignatures` passes (6/6 signatures and both public keys).
+`TestVectorSendMessage`, `TestVectorKeyReg` and `TestVectorBuildSend` fail only on the stubs.
+A throwaway implementation of `SendMessage` (reverted) turned `TestVectorSendMessage` green,
+so that test isn't vacuous. Until Phases 3-4 land, `go test ./...` is expected to fail in
+`delsignrepl/keys`; don't merge in between.
 
 ### Phase 2: API client foundation
 

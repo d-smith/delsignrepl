@@ -192,7 +192,10 @@ func formSendEthPayload(destination string, amount string) (*SendPayload, error)
 	if state.PrivateKey == nil {
 		return nil, fmt.Errorf("private key not set")
 	}
-	sig := keys.Sign(msg, state.PrivateKey)
+	sig, err := keys.Sign(msg, state.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
 
 	return &SendPayload{
 		SourceAddress:      state.Address,
