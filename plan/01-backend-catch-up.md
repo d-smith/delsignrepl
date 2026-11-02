@@ -571,10 +571,11 @@ balances. The app reaches only the backend API.
 
 ### Phase 0: housekeeping
 
-- [ ] Add `.gitignore` with `/.delsign/` and `*.pem` (D1).
-- [ ] `go mod tidy`, so direct dependencies stop being marked `// indirect`. Keep the
-      `go 1.20` directive unless something needs newer.
-- [ ] Add `github.com/google/uuid` (D5).
+- [x] Add `.gitignore` with `/.delsign/` and `*.pem` (D1).
+- [x] `go mod tidy`, so direct dependencies stop being marked `// indirect`. Kept the
+      `go 1.20` directive.
+- Adding `github.com/google/uuid` moved to Phase 4, where `BuildSend` first imports it.
+  Until then `go mod tidy` would only remove it again.
 
 **Done when:** it builds, the existing test passes, and `git check-ignore .delsign/keys/x/current.pem`
 confirms the file is ignored.
@@ -666,6 +667,7 @@ the walletctx list works.
   - destination is trimmed and validated before signing;
   - zero and empty amounts are refused.
 - [ ] Confirmation modal (D8).
+- [ ] `go get github.com/google/uuid` (D5).
 - [ ] `api.SendMessage` and `send.BuildSend` (D9, expiry 120 s), marshalled once, bytes
       kept.
 - [ ] The send outcome flow from §3, "Errors and retries": 200, no response with retry of

@@ -1,0 +1,3 @@
+# Dev RSA signing keys (see plan/01-backend-catch-up.md, D1). Never commit these.
+/.delsign/
+*.pem
