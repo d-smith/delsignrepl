@@ -2,9 +2,8 @@ package wallets
 
 import (
 	"delsignrepl/api"
-	"encoding/json"
+	"delsignrepl/ui"
 	"fmt"
-	"net/http"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -13,9 +12,9 @@ import (
 func DoWalletGeneration(pages *tview.Pages, appToken string) {
 	walletGenView := createWalletGenTextView(pages)
 	walletGenView.Write([]byte("\nGenerating wallet...\n"))
-	id, err := postWalletRequest(appToken)
+	id, err := api.New(appToken).CreateWallet()
 	if err != nil {
-		walletGenView.Write([]byte("Error: " + err.Error() + "\n"))
+		walletGenView.Write([]byte("Error: " + ui.Describe(err, appToken) + "\n"))
 	} else {
 		walletGenView.Write([]byte(fmt.Sprintf("Wallet ID: %d\n", id)))
 	}
@@ -38,54 +37,12 @@ func createWalletGenTextView(pages *tview.Pages) *tview.TextView {
 	return textView
 }
 
-func postWalletRequest(appToken string) (int, error) {
-	req, err := http.NewRequest(http.MethodPost, "http://localhost:3010/api/v1/wallets", nil)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+appToken)
+// WalletAddressPair is one (wallet, address) entry from GET /api/v1/walletctx.
+type WalletAddressPair = api.WalletAddressPair
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-
-	if resp.StatusCode != 201 {
-		return 0, fmt.Errorf("error generating wallet")
-	}
-
-	var walletInfo api.WalletInfo
-	err = json.NewDecoder(resp.Body).Decode(&walletInfo)
-	if err != nil {
-		return 0, err
-	}
-
-	return walletInfo.ID, nil
-}
-
-type WalletAddressPair struct {
-	WalletId int    `json:"walletId"`
-	Address  string `json:"address"`
-}
-
+// GetWalletsAndAddresses returns all the user's wallet/address pairs (empty if none).
 func GetWalletsAndAddresses(appToken string) ([]WalletAddressPair, error) {
-	var walletAddressPairs []WalletAddressPair
-	req, err := http.NewRequest(http.MethodGet, "http://localhost:3010/api/v1/walletctx", nil)
-	req.Header.Set("Authorization", "Bearer "+appToken)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return walletAddressPairs, err
-	}
-
-	if resp.StatusCode != 200 {
-		return walletAddressPairs, fmt.Errorf("error retrieving wallets and addresses for user")
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(&walletAddressPairs)
-	if err != nil {
-		return walletAddressPairs, err
-	}
-
-	return walletAddressPairs, nil
+	return api.New(appToken).WalletContext()
 }
 
 func PairsToStrings(pairs []WalletAddressPair) []string {

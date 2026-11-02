@@ -1,14 +1,14 @@
 package send
 
 import (
-	"bytes"
+	"delsignrepl/api"
 	"delsignrepl/keys"
 	"delsignrepl/state"
+	"delsignrepl/ui"
 	"delsignrepl/wallets"
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"net/http"
 
 	"github.com/rivo/tview"
 )
@@ -68,7 +68,7 @@ func ShowSendForm(pages *tview.Pages, appToken string) {
 
 			if err != nil {
 				modal := tview.NewModal().
-					SetText(fmt.Sprintf("Error retrieving wallet and address context: %s", err.Error())).
+					SetText(fmt.Sprintf("Error retrieving wallet and address context: %s", ui.Describe(err, appToken))).
 					AddButtons([]string{"OK"}).
 					SetDoneFunc(func(_ int, _ string) {
 						pages.SwitchToPage("SendEth")
@@ -153,7 +153,7 @@ func processSendForm(pages *tview.Pages, destination string, amount string, appT
 	if err != nil {
 		modal = tview.NewModal().
 			SetText(fmt.Sprintf("Error sending ETH: %s",
-				err.Error())).
+				ui.Describe(err, appToken))).
 			AddButtons([]string{"OK"}).
 			SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 				if buttonLabel == "OK" {
@@ -215,29 +215,10 @@ func sendEth(destination string, amount string, appToken string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	bodyReader := bytes.NewReader(payloadJson)
-	req, err := http.NewRequest(http.MethodPost, "http://localhost:3010/api/v1/wallets/send", bodyReader)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+appToken)
-
-	resp, err := http.DefaultClient.Do(req)
+	// Phase 4 replaces this payload with the new signed format (api.SendRequest).
+	result, err := api.New(appToken).Send(payloadJson)
 	if err != nil {
 		return "", err
 	}
-
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("error sending ETH: %s", resp.Status)
-	}
-
-	var transactionContext struct {
-		Txnid string `json:"txnid"`
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(&transactionContext)
-	if err != nil {
-		return "", err
-	}
-
-	return transactionContext.Txnid, nil
-
+	return result.Txnid, nil
 }

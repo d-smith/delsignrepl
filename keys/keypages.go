@@ -1,13 +1,11 @@
 package keys
 
 import (
-	"bytes"
 	"delsignrepl/api"
 	"delsignrepl/state"
 	"delsignrepl/token"
-	"encoding/json"
+	"delsignrepl/ui"
 	"fmt"
-	"net/http"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -34,9 +32,9 @@ func DoKeyGeneration(pages *tview.Pages) {
 	pages.SwitchToPage("Keygen")
 }
 
-func doKeyRegErrorModel(pages *tview.Pages, err error) {
+func doKeyRegErrorModel(pages *tview.Pages, err error, appToken string) {
 	modal := tview.NewModal().
-		SetText(fmt.Sprintf("Error registering key: %s", err.Error())).
+		SetText(fmt.Sprintf("Error registering key: %s", ui.Describe(err, appToken))).
 		AddButtons([]string{"OK"}).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 			if buttonLabel == "OK" {
@@ -66,12 +64,12 @@ func DoKeyRegistration(pages *tview.Pages, appToken string) {
 
 	email, err := token.ExtractEmailFromToken(appToken, "secret")
 	if err != nil {
-		doKeyRegErrorModel(pages, err)
+		doKeyRegErrorModel(pages, err, appToken)
 	} else {
 
 		sig, err := Sign(email.(string), state.PrivateKey)
 		if err != nil {
-			doKeyRegErrorModel(pages, err)
+			doKeyRegErrorModel(pages, err, appToken)
 			return
 		}
 
@@ -80,9 +78,9 @@ func DoKeyRegistration(pages *tview.Pages, appToken string) {
 			SignatureForRegistration: sig,
 		}
 
-		err = postKeyReg(keyReg, appToken)
+		err = api.New(appToken).RegisterKey(keyReg)
 		if err != nil {
-			doKeyRegErrorModel(pages, err)
+			doKeyRegErrorModel(pages, err, appToken)
 		} else {
 
 			doKeyRegOKModel(pages)
@@ -100,27 +98,4 @@ func createRegisterTextView(pages *tview.Pages) *tview.TextView {
 	})
 
 	return textView
-}
-
-func postKeyReg(keyReg api.KeyReg, appToken string) error {
-
-	keyRegJSON, err := json.Marshal(keyReg)
-	if err != nil {
-		return err
-	}
-	bodyReader := bytes.NewReader(keyRegJSON)
-	req, err := http.NewRequest(http.MethodPost, "http://localhost:3010/api/v1/keyreg", bodyReader)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+appToken)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("error registering key")
-	}
-
-	return nil
 }

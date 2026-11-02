@@ -21,3 +21,33 @@ type SendRequest struct {
 	Expiry    int64  `json:"expiry"`
 	Sig       string `json:"sig"`
 }
+
+// UserInfo is the response of GET /api/v1/users/{email}.
+type UserInfo struct {
+	Email  string `json:"email"`
+	PubKey string `json:"pubkey"`
+}
+
+// EOA is the response of POST /api/v1/wallets/{id}/addresses.
+type EOA struct {
+	Address string `json:"eoa"`
+}
+
+// WalletAddressPair is one entry of GET /api/v1/walletctx.
+type WalletAddressPair struct {
+	WalletId int    `json:"walletId"`
+	Address  string `json:"address"`
+}
+
+// Balance is the response of GET /api/v1/wallets/balance/{address}. Amount is wei as a
+// decimal string; parse it into a *big.Int, never a float or int64.
+type Balance struct {
+	Address string `json:"address"`
+	Amount  string `json:"amount"`
+}
+
+// SendResult is the response of POST /api/v1/wallets/send. Txnid is the transaction hash
+// of a broadcast (not yet mined) transaction.
+type SendResult struct {
+	Txnid string `json:"txnid"`
+}

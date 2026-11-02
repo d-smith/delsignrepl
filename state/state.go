@@ -2,6 +2,7 @@ package state
 
 import (
 	"crypto/rsa"
+	"delsignrepl/ui"
 	"delsignrepl/wallets"
 	"fmt"
 
@@ -19,7 +20,7 @@ func DoSetWalletAndAccountCtx(pages *tview.Pages, appToken string) {
 
 	if err != nil {
 		modal := tview.NewModal().
-			SetText(fmt.Sprintf("Error retrieving wallet and address context: %s", err.Error())).
+			SetText(fmt.Sprintf("Error retrieving wallet and address context: %s", ui.Describe(err, appToken))).
 			AddButtons([]string{"OK"}).
 			SetDoneFunc(func(_ int, _ string) {
 				pages.SwitchToPage("Menu")

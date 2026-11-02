@@ -602,7 +602,7 @@ so that test isn't vacuous. Until Phases 3-4 land, `go test ./...` is expected t
 
 ### Phase 2: API client foundation
 
-- [ ] `api.Client`:
+- [x] `api.Client`:
   - base URL from `DELSIGN_API_URL`;
   - a `*http.Client` with a 20 s timeout;
   - bearer token on every call;
@@ -610,13 +610,13 @@ so that test isn't vacuous. Until Phases 3-4 land, `go test ./...` is expected t
   - every body read and closed;
   - `api.Error{Status, Text}`;
   - `DoRaw` for resending exact bytes.
-- [ ] Move the seven calls onto it, removing every hardcoded URL (§3, "Connecting").
-- [ ] **Fix `GET /wallets` to expect 200** (`wallets/address.go:80`), and stop dropping its
+- [x] Move the seven calls onto it, removing every hardcoded URL (§3, "Connecting").
+- [x] **Fix `GET /wallets` to expect 200** (`wallets/address.go:80`), and stop dropping its
       error (`:12`).
-- [ ] Add `AuthPing()` and `GetUser(email)`.
-- [ ] A shared modal helper that maps `api.Error` to the messages in §3, "Errors and
+- [x] Add `AuthPing()` and `GetUser(email)`.
+- [x] A shared modal helper that maps `api.Error` to the messages in §3, "Errors and
       retries", including the 403 → authping check.
-- [ ] Tests with `httptest.Server`. The handlers are written from `openapi.yaml`'s status
+- [x] Tests with `httptest.Server`. The handlers are written from `openapi.yaml`'s status
       codes and examples, with no backend imports:
   - headers are correct;
   - bodyless POSTs send no `Content-Type`;
@@ -626,6 +626,20 @@ so that test isn't vacuous. Until Phases 3-4 land, `go test ./...` is expected t
 
 **Done when:** tests pass. Manually: create a wallet, generate an address (works again), and
 the walletctx list works.
+
+Result (2026-11-02):
+- `api` and `ui` tests pass. `keys` is still red only on the Phase 1 stubs.
+- **Manual check not yet run:** no backend was listening on `localhost:3010`.
+- Files and choices:
+  - the client lives in `api/client.go` and `api/endpoints.go`;
+  - errors are typed: `*api.Error` for non-2xx, `*api.NetworkError` for no response;
+  - error messages go through a new `ui` package (`ui.Describe`, `ui.ShowError`);
+  - `wallets.WalletAddressPair` is now an alias of `api.WalletAddressPair`.
+- **Side effect:** balance works again. The contract-typed `api.Balance` has a string
+  `amount`, parsed with `big.Int.SetString(s, 10)` for now. Phase 4 swaps in `ParseWei`.
+- **Still broken until Phase 4:** sends still post the old payload.
+- **Still to come in Phase 3:** a 403 that `/authping` confirms as a token problem says
+  "Log in again", but routing to the token page arrives with the "Log in again" menu item.
 
 ### Phase 3: tokens and keys
 
