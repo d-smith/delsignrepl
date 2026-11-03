@@ -17,7 +17,8 @@ func DoGetBalance(pages *tview.Pages, walletId int, address string, appToken str
 
 		balance, err := getBalanceForAddress(address, appToken)
 		if err != nil {
-			msg = "Error retrieving balance: " + ui.Describe(err, appToken)
+			ui.ShowError(pages, "Error retrieving balance", err, appToken, "Menu")
+			return
 		} else {
 			msg = fmt.Sprintf("Balance for wallet %d, address %s is %d wei (%d ether)",
 				walletId, address, balance, weiToEther(balance))

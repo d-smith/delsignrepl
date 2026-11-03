@@ -67,15 +67,7 @@ func ShowSendForm(pages *tview.Pages, appToken string) {
 			walletAddressPairs, err := wallets.GetWalletsAndAddresses(appToken)
 
 			if err != nil {
-				modal := tview.NewModal().
-					SetText(fmt.Sprintf("Error retrieving wallet and address context: %s", ui.Describe(err, appToken))).
-					AddButtons([]string{"OK"}).
-					SetDoneFunc(func(_ int, _ string) {
-						pages.SwitchToPage("SendEth")
-					})
-
-				pages.AddPage("CtxErr", modal, true, false)
-				pages.SwitchToPage("CtxErr")
+				ui.ShowError(pages, "Error retrieving wallet and address context", err, appToken, "SendEth")
 				return
 			}
 
@@ -151,15 +143,8 @@ func processSendForm(pages *tview.Pages, destination string, amount string, appT
 
 	txnid, err := sendEth(destination, amount, appToken) // Source is from wallet context
 	if err != nil {
-		modal = tview.NewModal().
-			SetText(fmt.Sprintf("Error sending ETH: %s",
-				ui.Describe(err, appToken))).
-			AddButtons([]string{"OK"}).
-			SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-				if buttonLabel == "OK" {
-					pages.SwitchToPage("Menu")
-				}
-			})
+		ui.ShowError(pages, "Error sending ETH", err, appToken, "Menu")
+		return
 	} else {
 
 		modal = tview.NewModal().

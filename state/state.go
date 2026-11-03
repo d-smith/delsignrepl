@@ -4,13 +4,14 @@ import (
 	"crypto/rsa"
 	"delsignrepl/ui"
 	"delsignrepl/wallets"
-	"fmt"
 
 	"github.com/rivo/tview"
 )
 
+// Email is the logged-in user's email (from the token). PrivateKey is their current
+// signing key, loaded from the key store, or nil if there isn't one yet.
+var Email string
 var PrivateKey *rsa.PrivateKey
-var PublicKeyDER string
 var WalletId int
 var Address string
 
@@ -19,15 +20,7 @@ func DoSetWalletAndAccountCtx(pages *tview.Pages, appToken string) {
 	walletAddressPairs, err := wallets.GetWalletsAndAddresses(appToken)
 
 	if err != nil {
-		modal := tview.NewModal().
-			SetText(fmt.Sprintf("Error retrieving wallet and address context: %s", ui.Describe(err, appToken))).
-			AddButtons([]string{"OK"}).
-			SetDoneFunc(func(_ int, _ string) {
-				pages.SwitchToPage("Menu")
-			})
-
-		pages.AddPage("CtxErr", modal, true, false)
-		pages.SwitchToPage("CtxErr")
+		ui.ShowError(pages, "Error retrieving wallet and address context", err, appToken, "Menu")
 		return
 	}
 

@@ -14,7 +14,8 @@ func DoWalletGeneration(pages *tview.Pages, appToken string) {
 	walletGenView.Write([]byte("\nGenerating wallet...\n"))
 	id, err := api.New(appToken).CreateWallet()
 	if err != nil {
-		walletGenView.Write([]byte("Error: " + ui.Describe(err, appToken) + "\n"))
+		ui.ShowError(pages, "Error creating wallet", err, appToken, "Menu")
+		return
 	} else {
 		walletGenView.Write([]byte(fmt.Sprintf("Wallet ID: %d\n", id)))
 	}

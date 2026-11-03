@@ -35,30 +35,20 @@ func DoAddressGeneration(pages *tview.Pages, appToken string) {
 				selection = idx
 			}).
 		AddButton("Save", func() {
-			var modal *tview.Modal
 			address, err := api.New(appToken).CreateAddress(wallets[selection])
 			if err != nil {
-				modal = tview.NewModal().
-					SetText(fmt.Sprintf("Error creating address for wallet: %s",
-						ui.Describe(err, appToken))).
-					AddButtons([]string{"OK"}).
-					SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-						if buttonLabel == "OK" {
-							pages.SwitchToPage("Menu")
-						}
-					})
-			} else {
-
-				modal = tview.NewModal().
-					SetText(fmt.Sprintf("New address for wallet %d is %s",
-						wallets[selection], address)).
-					AddButtons([]string{"OK"}).
-					SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-						if buttonLabel == "OK" {
-							pages.SwitchToPage("Menu")
-						}
-					})
+				ui.ShowError(pages, "Error creating address for wallet", err, appToken, "Menu")
+				return
 			}
+			modal := tview.NewModal().
+				SetText(fmt.Sprintf("New address for wallet %d is %s",
+					wallets[selection], address)).
+				AddButtons([]string{"OK"}).
+				SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+					if buttonLabel == "OK" {
+						pages.SwitchToPage("Menu")
+					}
+				})
 
 			pages.AddPage("NewAddress", modal, true, false)
 			pages.SwitchToPage("NewAddress")

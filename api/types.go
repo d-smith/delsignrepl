@@ -1,9 +1,13 @@
 package api
 
+// KeyReg is the body of POST /api/v1/keyreg. Sig4Rotate is only for replacing a
+// registered key; omitempty keeps it out of a first registration, where an empty value
+// would be rejected.
 type KeyReg struct {
 	Email                    string `json:"email"`
 	PubKey                   string `json:"pubkey"`
 	SignatureForRegistration string `json:"sig4reg"`
+	Sig4Rotate               string `json:"sig4rotate,omitempty"`
 }
 
 type WalletInfo struct {

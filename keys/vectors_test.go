@@ -99,7 +99,10 @@ func TestVectorSignatures(t *testing.T) {
 
 	for name, k := range vf.Keys {
 		priv := privs[name]
-		_, pubHex := keys.Encode(priv, &priv.PublicKey)
+		pubHex, err := keys.PublicKeyHex(&priv.PublicKey)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if pubHex != k.PublicKeySpkiHex {
 			t.Errorf("%s: public key hex differs from publicKeySpkiHex", name)
 		}

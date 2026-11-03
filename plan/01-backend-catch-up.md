@@ -643,7 +643,7 @@ Result (2026-11-02):
 
 ### Phase 3: tokens and keys
 
-- [ ] Tokens (D3):
+- [x] Tokens (D3):
   - `ParseUnverified`;
   - require `email` and `exp`;
   - `authping` on save;
@@ -651,19 +651,19 @@ Result (2026-11-02):
   - the "Log in again" menu item;
   - cheat code driven by `DELSIGN_DEV_JWT_SECRET`, with the hardcoded `"secret"` removed
     from `token/input.go:79` and `keys/keypages.go:67`.
-- [ ] Key store (D1):
+- [x] Key store (D1):
   - PKCS #8 PEM, `0600`, atomic write, in `DELSIGN_KEY_DIR` (default `.delsign/keys`);
   - refuse files that group or others can read;
   - load at login for the token's email;
   - `Decode`/`Encode` return errors instead of discarding them.
-- [ ] Key generation makes `current` or `pending` and never overwrites `current`. Show the
+- [x] Key generation makes `current` or `pending` and never overwrites `current`. Show the
       lost-key warning.
-- [ ] `api.KeyReg.Sig4Rotate` with `omitempty`. `keys.BuildKeyReg`.
-- [ ] Register flow as in D2, including 409 → reload and re-run once, and 403 → authping
+- [x] `api.KeyReg.Sig4Rotate` with `omitempty`. `keys.BuildKeyReg`.
+- [x] Register flow as in D2, including 409 → reload and re-run once, and 403 → authping
       check.
-- [ ] A read-only key check after login. A menu line or modal says whether the local key
+- [x] A read-only key check after login. A menu line or modal says whether the local key
       matches the registered one.
-- [ ] Tests:
+- [x] Tests:
   - vector checks 5 and 6 pass;
   - store round trip and file mode;
   - a group-readable key file is refused;
@@ -679,6 +679,32 @@ Result (2026-11-02):
 - quit and restart: the key loads from `.delsign/keys` and the check says "matches";
 - rotate: the check still says "matches", now for the new key;
 - `git status` shows no key files.
+
+Result (2026-11-02):
+- **Tests:** all Phase 3 tests pass (store, register/rotate flow, key check, tokens,
+  cheat-code visibility). `TestVectorKeyReg` (checks 5 and 6) is now green. `keys` is red
+  only on the two send vector tests, which belong to Phase 4.
+- **Manual check not yet run:** no backend on `localhost:3010`.
+- **Files:**
+  - `keys/store.go`: the key store;
+  - `keys/keyreg.go`: `BuildKeyReg`, `Register` and `CheckKey`;
+  - `keys/keypages.go`: the UI;
+  - `token/token.go`: `ParseClaims`, `Login` and `DevSecret`.
+- **How the tests work:**
+  - The register tests run against a stateful fake backend. It verifies `sig4reg` and
+    `sig4rotate` with the standard library and can drop the response after applying a
+    rotation.
+  - That last case proves a lost rotation response leaves both keys on disk, and that
+    the next Register promotes the pending key.
+- **Additions beyond the task list:**
+  - a **Key status** menu item (`i`), as well as the check after login;
+  - "Generate key" refuses to make a second pending key while one is waiting, since
+    overwriting it could destroy a key the backend has already accepted;
+  - `ui.ShowError` sends the user to the login page when `/authping` confirms a token
+    problem, and the remaining error modals now use it;
+  - login fails with a message if the backend can't be reached, because `/authping` runs
+    on save;
+  - `state.PublicKeyDER` is removed, and `state.Email` is added.
 
 ### Phase 4: amounts and sends
 
