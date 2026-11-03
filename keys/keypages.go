@@ -1,122 +1,151 @@
 package keys
 
 import (
-	"bytes"
 	"delsignrepl/api"
 	"delsignrepl/state"
-	"delsignrepl/token"
-	"encoding/json"
+	"delsignrepl/ui"
+	"errors"
 	"fmt"
-	"net/http"
 
-	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
-func DoKeyGeneration(pages *tview.Pages) {
+const lostKeyWarning = "This file is your only way to authorise sends. If it's lost, funds in your " +
+	"addresses are locked unless the backend owner resets your account."
 
-	priv, pub := Generate()
-	_, pubEnc := Encode(priv, pub)
-
-	state.PrivateKey = priv
-	state.PublicKeyDER = pubEnc
-
+func showMessage(pages *tview.Pages, name, text string) {
 	modal := tview.NewModal().
-		SetText(fmt.Sprintf("RSA user key pair generated.")).
+		SetText(text).
 		AddButtons([]string{"OK"}).
-		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			if buttonLabel == "OK" {
-				pages.SwitchToPage("Menu")
-			}
-		})
-
-	pages.AddPage("Keygen", modal, true, false)
-	pages.SwitchToPage("Keygen")
-}
-
-func doKeyRegErrorModel(pages *tview.Pages, err error) {
-	modal := tview.NewModal().
-		SetText(fmt.Sprintf("Error registering key: %s", err.Error())).
-		AddButtons([]string{"OK"}).
-		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			if buttonLabel == "OK" {
-				pages.SwitchToPage("Menu")
-			}
-		})
-
-	pages.AddPage("KeyRegError", modal, true, false)
-	pages.SwitchToPage("KeyRegError")
-}
-
-func doKeyRegOKModel(pages *tview.Pages) {
-	modal := tview.NewModal().
-		SetText(fmt.Sprintf("Key registered")).
-		AddButtons([]string{"OK"}).
-		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			if buttonLabel == "OK" {
-				pages.SwitchToPage("Menu")
-			}
-		})
-
-	pages.AddPage("KeyRegError", modal, true, false)
-	pages.SwitchToPage("KeyRegError")
-}
-
-func DoKeyRegistration(pages *tview.Pages, appToken string) {
-
-	email, err := token.ExtractEmailFromToken(appToken, "secret")
-	if err != nil {
-		doKeyRegErrorModel(pages, err)
-	} else {
-
-		sig := Sign(email.(string), state.PrivateKey)
-
-		keyReg := api.KeyReg{Email: email.(string),
-			PubKey:                   state.PublicKeyDER,
-			SignatureForRegistration: sig,
-		}
-
-		err = postKeyReg(keyReg, appToken)
-		if err != nil {
-			doKeyRegErrorModel(pages, err)
-		} else {
-
-			doKeyRegOKModel(pages)
-		}
-	}
-}
-
-func createRegisterTextView(pages *tview.Pages) *tview.TextView {
-	textView := tview.NewTextView().SetText("Key registration")
-	textView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Rune() == 109 {
+		SetDoneFunc(func(_ int, _ string) {
 			pages.SwitchToPage("Menu")
-		}
-		return event
-	})
-
-	return textView
+		})
+	pages.AddPage(name, modal, true, false)
+	pages.SwitchToPage(name)
 }
 
-func postKeyReg(keyReg api.KeyReg, appToken string) error {
-
-	keyRegJSON, err := json.Marshal(keyReg)
+// loadCurrent makes the stored current key for the logged-in email the signing key.
+func loadCurrent(s Store) error {
+	k, err := s.Load(state.Email, Current)
 	if err != nil {
+		state.PrivateKey = nil
 		return err
 	}
-	bodyReader := bytes.NewReader(keyRegJSON)
-	req, err := http.NewRequest(http.MethodPost, "http://localhost:3010/api/v1/keyreg", bodyReader)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+appToken)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("error registering key")
-	}
-
+	state.PrivateKey = k
 	return nil
+}
+
+// OnLogin runs after a token is accepted: it loads this email's key and shows whether it
+// matches the registered one.
+func OnLogin(pages *tview.Pages, email, appToken string) {
+	state.Email = email
+	s := StoreFromEnv()
+	if err := loadCurrent(s); err != nil {
+		ui.ShowError(pages, "Error loading your key", err, appToken, "Menu")
+		return
+	}
+	DoKeyStatus(pages, appToken)
+}
+
+// DoKeyStatus shows whether this machine's key is the registered one. It changes nothing.
+func DoKeyStatus(pages *tview.Pages, appToken string) {
+	if state.Email == "" {
+		showMessage(pages, "KeyStatus", "Log in first (t).")
+		return
+	}
+	st, err := CheckKey(api.New(appToken), StoreFromEnv(), state.Email)
+	if err != nil {
+		ui.ShowError(pages, "Error checking your key", err, appToken, "Menu")
+		return
+	}
+	showMessage(pages, "KeyStatus", fmt.Sprintf("Signed in as %s.\n\n%s", state.Email, st))
+}
+
+// DoKeyGeneration makes the current key if there's none, or else (after confirmation) a
+// pending replacement. It never overwrites the current key.
+func DoKeyGeneration(pages *tview.Pages) {
+	if state.Email == "" {
+		showMessage(pages, "Keygen", "Log in first (t).")
+		return
+	}
+	s := StoreFromEnv()
+	fail := func(err error) {
+		showMessage(pages, "Keygen", "Error generating key: "+err.Error())
+	}
+
+	current, err := s.Load(state.Email, Current)
+	if err != nil {
+		fail(err)
+		return
+	}
+	if current == nil {
+		k, err := Generate()
+		if err == nil {
+			err = s.Save(state.Email, Current, k)
+		}
+		if err != nil {
+			fail(err)
+			return
+		}
+		state.PrivateKey = k
+		path, _ := s.Path(state.Email, Current)
+		showMessage(pages, "Keygen", fmt.Sprintf("Signing key saved to %s.\n\n%s\n\nNow register it (r).", path, lostKeyWarning))
+		return
+	}
+
+	pending, err := s.Load(state.Email, Pending)
+	if err != nil {
+		fail(err)
+		return
+	}
+	if pending != nil {
+		showMessage(pages, "Keygen", "A replacement key is already waiting. Register it (r) before making another.")
+		return
+	}
+
+	confirm := tview.NewModal().
+		SetText("You already have a key. Make a replacement?\n\n" +
+			"Your current key stays in use until the replacement is registered (r).").
+		AddButtons([]string{"Replace", "Cancel"}).
+		SetDoneFunc(func(_ int, label string) {
+			if label != "Replace" {
+				pages.SwitchToPage("Menu")
+				return
+			}
+			k, err := Generate()
+			if err == nil {
+				err = s.Save(state.Email, Pending, k)
+			}
+			if err != nil {
+				fail(err)
+				return
+			}
+			path, _ := s.Path(state.Email, Pending)
+			showMessage(pages, "Keygen", fmt.Sprintf("Replacement key saved to %s.\n\n%s\n\nRegister it (r) to switch to it.", path, lostKeyWarning))
+		})
+	pages.AddPage("KeygenConfirm", confirm, true, false)
+	pages.SwitchToPage("KeygenConfirm")
+}
+
+// DoKeyRegistration registers the key, or rotates to a pending replacement (plan D2).
+func DoKeyRegistration(pages *tview.Pages, appToken string) {
+	if state.Email == "" {
+		showMessage(pages, "KeyReg", "Log in first (t).")
+		return
+	}
+	s := StoreFromEnv()
+	out, err := Register(api.New(appToken), s, state.Email)
+	if errors.Is(err, ErrNoKey) || errors.Is(err, ErrKeyMismatch) {
+		showMessage(pages, "KeyReg", "Can't register: "+err.Error()+".")
+		return
+	}
+	if err != nil {
+		ui.ShowError(pages, "Error registering key", err, appToken, "Menu")
+		return
+	}
+	if err := loadCurrent(s); err != nil {
+		ui.ShowError(pages, "Key registered, but loading it failed", err, appToken, "Menu")
+		return
+	}
+	showMessage(pages, "KeyReg", out.String())
 }

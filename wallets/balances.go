@@ -1,10 +1,10 @@
 package wallets
 
 import (
-	"encoding/json"
+	"delsignrepl/api"
+	"delsignrepl/ui"
 	"fmt"
 	"math/big"
-	"net/http"
 
 	"github.com/rivo/tview"
 )
@@ -17,10 +17,11 @@ func DoGetBalance(pages *tview.Pages, walletId int, address string, appToken str
 
 		balance, err := getBalanceForAddress(address, appToken)
 		if err != nil {
-			msg = "Error retrieving balance: " + err.Error()
+			ui.ShowError(pages, "Error retrieving balance", err, appToken, "Menu")
+			return
 		} else {
-			msg = fmt.Sprintf("Balance for wallet %d, address %s is %d wei (%d ether)",
-				walletId, address, balance, weiToEther(balance))
+			msg = fmt.Sprintf("Balance for wallet %d, address %s is %s wei (%s ETH)",
+				walletId, address, balance.String(), api.FormatEther(balance))
 		}
 
 	}
@@ -41,33 +42,13 @@ func DoGetBalance(pages *tview.Pages, walletId int, address string, appToken str
 }
 
 func getBalanceForAddress(address string, appToken string) (*big.Int, error) {
-
-	req, err := http.NewRequest(http.MethodGet,
-		"http://localhost:3010/api/v1/wallets/balance/"+address, nil)
-	req.Header.Set("Authorization", "Bearer "+appToken)
-
-	resp, err := http.DefaultClient.Do(req)
+	b, err := api.New(appToken).Balance(address)
 	if err != nil {
 		return nil, err
 	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("error retrieving wallets and addresses for user")
-	}
-
-	var accountBalance struct {
-		Address string   `json:"address"`
-		Amount  *big.Int `json:"amount"`
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(&accountBalance)
+	amount, err := api.ParseWei(b.Amount)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("server sent an invalid amount: %w", err)
 	}
-
-	return accountBalance.Amount, nil
-}
-
-func weiToEther(val *big.Int) *big.Int {
-	return new(big.Int).Div(val, big.NewInt(1e18))
+	return amount, nil
 }
