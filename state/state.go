@@ -15,51 +15,30 @@ var PrivateKey *rsa.PrivateKey
 var WalletId int
 var Address string
 
-func DoSetWalletAndAccountCtx(pages *tview.Pages, appToken string) {
-	selection := 0
-	walletAddressPairs, err := wallets.GetWalletsAndAddresses(appToken)
-
+// DoSetWalletAndAccountCtx lets the user pick the wallet and address that balance and
+// send use.
+func DoSetWalletAndAccountCtx(sh *ui.Shell) {
+	pairs, err := wallets.GetWalletsAndAddresses(sh.Token())
 	if err != nil {
-		ui.ShowError(pages, "Error retrieving wallet and address context", err, appToken, "Menu")
+		sh.Error("Error retrieving wallet and address context", err)
+		return
+	}
+	if len(pairs) == 0 {
+		sh.Message("No wallets with addresses found. Create a wallet (w) and an address (a) first.")
 		return
 	}
 
-	if len(walletAddressPairs) == 0 {
-		modal := tview.NewModal().
-			SetText("No wallets and addresses found. Please create a wallet and address first").
-			AddButtons([]string{"OK"}).
-			SetDoneFunc(func(_ int, _ string) {
-				pages.SwitchToPage("Menu")
-			})
-
-		pages.AddPage("NoWallets", modal, true, false)
-		pages.SwitchToPage("NoWallets")
-		return
-	}
-
+	selection := 0
 	form := tview.NewForm().
-		AddButton("Done", func() {
-			WalletId = walletAddressPairs[selection].WalletId
-			Address = walletAddressPairs[selection].Address
-			pages.SwitchToPage("Menu")
+		AddDropDown("Wallet | address: ", wallets.PairsToStrings(pairs), 0, func(_ string, idx int) {
+			selection = idx
 		}).
-		AddButton("Cancel", func() {
-			pages.SwitchToPage("Menu")
-		})
-
-	if err == nil {
-
-		form.
-			AddDropDown("Select an option (hit Enter): ", wallets.PairsToStrings(walletAddressPairs), 0,
-				func(val string, idx int) {
-					selection = idx
-				})
-	} else {
-		form.AddTextView("Status", err.Error(), 50, 1, true, true)
-
-	}
-
-	form.SetBorder(true).SetTitle("Select wallet and address for txn context").SetTitleAlign(tview.AlignLeft)
-	pages.AddPage("SetCtx", form, true, false)
-	pages.SwitchToPage("SetCtx")
+		AddButton("Use this", func() {
+			WalletId = pairs[selection].WalletId
+			Address = pairs[selection].Address
+			sh.Home()
+		}).
+		AddButton("Cancel", sh.Back)
+	form.SetBorder(true).SetTitle(" Wallet and address for balance and send ").SetTitleAlign(tview.AlignLeft)
+	sh.Show("SetCtx", form)
 }

@@ -2,6 +2,7 @@ package token
 
 import (
 	"delsignrepl/api"
+	"delsignrepl/ui"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -105,13 +106,13 @@ func TestLogin(t *testing.T) {
 func TestCheatCodeOnlyWithDevSecret(t *testing.T) {
 	var tok string
 	t.Setenv(DevSecretEnv, "")
-	form := GetTokenInputForm(tview.NewPages(), nil, &tok, func(string) {})
+	form := GetTokenInputForm(ui.NewShell(tview.NewApplication()), &tok, func(string) {})
 	if form.GetFormItemByLabel(CheatCodeLabel) != nil {
 		t.Error("cheat code shown without " + DevSecretEnv)
 	}
 
 	t.Setenv(DevSecretEnv, "s3cret")
-	form = GetTokenInputForm(tview.NewPages(), nil, &tok, func(string) {})
+	form = GetTokenInputForm(ui.NewShell(tview.NewApplication()), &tok, func(string) {})
 	if form.GetFormItemByLabel(CheatCodeLabel) == nil {
 		t.Error("cheat code hidden although " + DevSecretEnv + " is set")
 	}

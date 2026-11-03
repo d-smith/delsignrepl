@@ -13,30 +13,28 @@ import (
 
 var appToken string
 
-// buildShell lays out the app: the existing screens run in the shell's content area and
-// the old menu's actions sit in the sidebar (plan/03, Phase 0).
+// buildShell lays out the app: the sidebar holds the actions, and their screens open in
+// the content area (plan/03). It starts on the login page; Esc from there goes Home.
 func buildShell(app *tview.Application) *ui.Shell {
 	sh := ui.NewShell(app)
-	pages := sh.Content
+	sh.Token = func() string { return appToken }
 
-	sh.AddAction("Generate key", 'k', func() { keys.DoKeyGeneration(pages) }).
-		AddAction("Register key", 'r', func() { keys.DoKeyRegistration(pages, appToken) }).
-		AddAction("Key status", 'i', func() { keys.DoKeyStatus(pages, appToken) }).
-		AddAction("Create wallet", 'w', func() { wallets.DoWalletGeneration(pages, appToken) }).
-		AddAction("Generate address", 'a', func() { wallets.DoAddressGeneration(pages, appToken) }).
-		AddAction("Set wallet context", 'c', func() { state.DoSetWalletAndAccountCtx(pages, appToken) }).
-		AddAction("Get balance", 'b', func() {
-			wallets.DoGetBalance(pages, state.WalletId, state.Address, appToken)
-		}).
-		AddAction("Send ETH", 's', func() { send.ShowSendForm(pages, appToken) }).
-		AddAction("Log in again", 't', func() { pages.SwitchToPage(ui.LoginPage) }).
+	sh.AddAction("Generate key", 'k', func() { keys.DoKeyGeneration(sh) }).
+		AddAction("Register key", 'r', func() { keys.DoKeyRegistration(sh) }).
+		AddAction("Key status", 'i', func() { keys.DoKeyStatus(sh) }).
+		AddAction("Create wallet", 'w', func() { wallets.DoWalletGeneration(sh) }).
+		AddAction("Generate address", 'a', func() { wallets.DoAddressGeneration(sh) }).
+		AddAction("Set wallet context", 'c', func() { state.DoSetWalletAndAccountCtx(sh) }).
+		AddAction("Get balance", 'b', func() { wallets.DoGetBalance(sh, state.WalletId, state.Address) }).
+		AddAction("Send ETH", 's', func() { send.ShowSendForm(sh) }).
+		AddAction("Help", '?', func() { sh.Show(ui.HelpPage, nil) }).
+		AddAction("Log in again", 't', func() { sh.Show(ui.LoginPage, nil) }).
 		AddAction("Quit", 'q', app.Stop)
 
-	home := tview.NewTextView().SetText("\n  Choose an action from the menu on the left.")
-	pages.AddPage(ui.HomePage, home, true, true)
+	sh.SetHome(tview.NewTextView().SetText("\n  Choose an action from the menu on the left.\n\n  Press ? for help."))
 
-	onLogin := func(email string) { keys.OnLogin(pages, email, appToken) }
-	pages.AddPage(ui.LoginPage, token.GetTokenInputForm(pages, app, &appToken, onLogin), true, true)
+	onLogin := func(email string) { keys.OnLogin(sh, email) }
+	sh.Show(ui.LoginPage, token.GetTokenInputForm(sh, &appToken, onLogin))
 	return sh
 }
 

@@ -129,6 +129,51 @@ Global keys go in `app.SetInputCapture`:
    - Global keys: Esc, `?`, F2, `q`.
    - Migrate every modal and error onto `Shell.Modal` and `Shell.Error`.
    - Remove the named-page returns and the `m` dead end.
+
+   Result (2026-11-03):
+   - **Shell API** (`ui/shell.go`):
+     - `Show(name, p)` opens a screen (or an existing page if `p` is nil) and
+       remembers the one it leaves. The history is cut back when a screen is revisited,
+       so going round in circles doesn't grow it.
+     - `Back`, `Home` and `Current`.
+     - `Modal(text, buttons, done)` overlays the current screen. Closing it, or Esc
+       (label `""`), returns there, then calls `done`.
+     - `Message(text)`, and `Error(prefix, err)`, which keeps `describeErr` and the
+       403 -> `/authping` -> login routing. It replaces `ui.ShowError`, which is gone.
+     - `Token func() string` is set by `main.go`. `SetMouse` and `Mouse`.
+   - **Global keys:**
+     - **Esc** goes back everywhere, including from a text field. A modal or an open
+       dropdown gets Esc first, so one Esc closes it and the next leaves the screen.
+     - **`?`** opens help except while typing.
+     - **F2** toggles the mouse; the footer shows `mouse:on/off`.
+     - **`q`** quits from the sidebar only.
+     - There's also a **Help** item in the sidebar.
+   - **Migrated:** every screen now takes a `*ui.Shell` (none take `*tview.Pages` or a
+     token any more):
+     - keys, wallets, wallet context, send (form, picker, confirmation and outcomes),
+       and login;
+     - every `SwitchToPage("Menu")`/`("SendEth")` and hand-built modal is gone. Cancel is
+       `Back`; finished actions go `Home`;
+     - "Create wallet" is a modal, removing the `m` dead end;
+     - the dropdowns are labelled "Wallet ID:" and "Wallet | address:" instead of
+       "Select an option (hit Enter)".
+   - **Found on the way:**
+     - `Pages.RemovePage` re-focuses the content itself, so closing a modal on Home left
+       the focus in Home's text instead of the sidebar. `Modal` re-applies the focus
+       rule after removing itself.
+     - An open dropdown moves the focus to its internal `*tview.List`. The shell treats a
+       focused list other than the sidebar as an open dropdown. Screens shouldn't use
+       plain `List`s; Phase 3 uses `Table`.
+   - **Tests:**
+     - `ui/shell_test.go`: Esc back through the history, no growth in circles, a modal
+       returning to its screen (and to the sidebar on Home), Esc closing a modal, help,
+       F2, `q`/`?` typed in a field, and a token error routing to login while others
+       stay put;
+     - `main_test.go` (fake backend): start on login, Esc from every sidebar screen, Esc
+       closing an open dropdown before leaving, and the send picker returning to the
+       form with the address filled in.
+
+     All are stable over 10 runs and under `-race`.
 2. **Context.** Session fields, the header and Home, refreshed at the points listed under Design 3.
 3. **Wallets and Send.** The table with picker mode; the Send screen with the ETH preview.
 4. **Keys and Log in.** The combined Keys screen; separate Email and Token fields.

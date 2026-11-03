@@ -5,12 +5,10 @@ import (
 	"delsignrepl/api"
 	"errors"
 	"fmt"
-
-	"github.com/rivo/tview"
 )
 
 // LoginPage is the name of the token entry page. A token problem routes the user there.
-const LoginPage = "Add Token"
+const LoginPage = "Login"
 
 // Describe turns an error from an API call into a message for the user, following the
 // error table in client-guide.md. It switches on the status code, never on the server's
@@ -76,21 +74,4 @@ func textOr(e *api.Error, fallback string) string {
 		return fallback
 	}
 	return e.Text
-}
-
-// ShowError shows prefix and the described error in a modal; OK switches to returnTo.
-// A token problem returns to LoginPage instead.
-func ShowError(pages *tview.Pages, prefix string, err error, token string, returnTo string) {
-	msg, tokenProblem := describeErr(err, func() error { return api.New(token).AuthPing() })
-	if tokenProblem {
-		returnTo = LoginPage
-	}
-	modal := tview.NewModal().
-		SetText(prefix + ": " + msg).
-		AddButtons([]string{"OK"}).
-		SetDoneFunc(func(_ int, _ string) {
-			pages.SwitchToPage(returnTo)
-		})
-	pages.AddPage("Error", modal, true, false)
-	pages.SwitchToPage("Error")
 }

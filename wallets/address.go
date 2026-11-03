@@ -8,57 +8,36 @@ import (
 	"github.com/rivo/tview"
 )
 
-func DoAddressGeneration(pages *tview.Pages, appToken string) {
-	wallets, err := api.New(appToken).ListWallets()
+// DoAddressGeneration lets the user pick a wallet and creates an address in it.
+func DoAddressGeneration(sh *ui.Shell) {
+	c := api.New(sh.Token())
+	wallets, err := c.ListWallets()
 	if err != nil {
-		ui.ShowError(pages, "Error listing wallets", err, appToken, "Menu")
+		sh.Error("Error listing wallets", err)
 		return
 	}
 	if len(wallets) == 0 {
-		modal := tview.NewModal().
-			SetText("No wallets found. Please create a wallet first").
-			AddButtons([]string{"OK"}).
-			SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-				if buttonLabel == "OK" {
-					pages.SwitchToPage("Menu")
-				}
-			})
-		pages.AddPage("NoWallets", modal, true, false)
-		pages.SwitchToPage("NoWallets")
+		sh.Message("No wallets found. Create a wallet first (w).")
 		return
 	}
 
 	selection := 0
 	form := tview.NewForm().
-		AddDropDown("Select an option (hit Enter): ", intsToStrings(wallets), 0,
-			func(val string, idx int) {
-				selection = idx
-			}).
-		AddButton("Save", func() {
-			address, err := api.New(appToken).CreateAddress(wallets[selection])
+		AddDropDown("Wallet ID: ", intsToStrings(wallets), 0, func(_ string, idx int) {
+			selection = idx
+		}).
+		AddButton("Create address", func() {
+			address, err := c.CreateAddress(wallets[selection])
 			if err != nil {
-				ui.ShowError(pages, "Error creating address for wallet", err, appToken, "Menu")
+				sh.Error("Error creating address", err)
 				return
 			}
-			modal := tview.NewModal().
-				SetText(fmt.Sprintf("New address for wallet %d is %s",
-					wallets[selection], address)).
-				AddButtons([]string{"OK"}).
-				SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-					if buttonLabel == "OK" {
-						pages.SwitchToPage("Menu")
-					}
-				})
-
-			pages.AddPage("NewAddress", modal, true, false)
-			pages.SwitchToPage("NewAddress")
+			sh.Modal(fmt.Sprintf("New address for wallet %d is %s", wallets[selection], address),
+				[]string{"OK"}, func(string) { sh.Home() })
 		}).
-		AddButton("Cancel", func() {
-			pages.SwitchToPage("Menu")
-		})
-	form.SetBorder(true).SetTitle("Select wallet for address gen").SetTitleAlign(tview.AlignLeft)
-	pages.AddPage("Address Gen", form, true, false)
-	pages.SwitchToPage("Address Gen")
+		AddButton("Cancel", sh.Back)
+	form.SetBorder(true).SetTitle(" New address ").SetTitleAlign(tview.AlignLeft)
+	sh.Show("Address Gen", form)
 }
 
 func intsToStrings(ints []int) []string {

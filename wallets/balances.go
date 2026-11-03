@@ -5,40 +5,21 @@ import (
 	"delsignrepl/ui"
 	"fmt"
 	"math/big"
-
-	"github.com/rivo/tview"
 )
 
-func DoGetBalance(pages *tview.Pages, walletId int, address string, appToken string) {
-	var msg string
+// DoGetBalance shows the balance of the context address in wei and ETH.
+func DoGetBalance(sh *ui.Shell, walletId int, address string) {
 	if walletId == 0 || address == "" {
-		msg = "Wallet and address context not set"
-	} else {
-
-		balance, err := getBalanceForAddress(address, appToken)
-		if err != nil {
-			ui.ShowError(pages, "Error retrieving balance", err, appToken, "Menu")
-			return
-		} else {
-			msg = fmt.Sprintf("Balance for wallet %d, address %s is %s wei (%s ETH)",
-				walletId, address, balance.String(), api.FormatEther(balance))
-		}
-
+		sh.Message("Wallet and address context not set. Choose one with Set wallet context (c).")
+		return
 	}
-
-	modal := tview.NewModal().
-		SetText(msg).
-		AddButtons([]string{"OK"}).
-		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			if buttonLabel == "OK" {
-				pages.SwitchToPage("Menu")
-			}
-
-		})
-
-	pages.AddPage("Balance", modal, true, false)
-	pages.SwitchToPage("Balance")
-
+	balance, err := getBalanceForAddress(address, sh.Token())
+	if err != nil {
+		sh.Error("Error retrieving balance", err)
+		return
+	}
+	sh.Message(fmt.Sprintf("Balance for wallet %d, address %s is %s wei (%s ETH)",
+		walletId, address, balance.String(), api.FormatEther(balance)))
 }
 
 func getBalanceForAddress(address string, appToken string) (*big.Int, error) {

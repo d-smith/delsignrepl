@@ -61,23 +61,14 @@ func GenerateToken(ttl time.Duration, payload interface{}, secretJWTKey string) 
 
 // GetTokenInputForm is the login page. On Save it checks the token (locally, then with
 // GET /authping), stores it in appToken, and calls onLogin with the token's email. The
-// cheat code checkbox appears only when DevSecret() is set.
-func GetTokenInputForm(pages *tview.Pages, app *tview.Application, appToken *string, onLogin func(email string)) *tview.Form {
+// cheat code checkbox appears only when DevSecret() is set. Errors show over the form.
+func GetTokenInputForm(sh *ui.Shell, appToken *string, onLogin func(email string)) *tview.Form {
 	tokenInput := tview.NewInputField().
 		SetLabel("Token value: ").
 		SetFieldWidth(80).
 		SetAcceptanceFunc(tview.InputFieldMaxLength(maxTokenLength))
 
-	showError := func(text string) {
-		modal := tview.NewModal().
-			SetText(text).
-			AddButtons([]string{"OK"}).
-			SetDoneFunc(func(_ int, _ string) {
-				pages.SwitchToPage(ui.LoginPage)
-			})
-		pages.AddPage("LoginError", modal, true, false)
-		pages.SwitchToPage("LoginError")
-	}
+	showError := sh.Message
 
 	form := tview.NewForm().AddFormItem(tokenInput)
 
@@ -116,9 +107,7 @@ func GetTokenInputForm(pages *tview.Pages, app *tview.Application, appToken *str
 			*appToken = tok
 			onLogin(claims.Email)
 		}).
-		AddButton("Quit", func() {
-			app.Stop()
-		})
-	form.SetBorder(true).SetTitle("Log in with a JWT").SetTitleAlign(tview.AlignLeft)
+		AddButton("Quit", sh.App.Stop)
+	form.SetBorder(true).SetTitle(" Log in with a JWT ").SetTitleAlign(tview.AlignLeft)
 	return form
 }
