@@ -6,9 +6,10 @@ import (
 	"delsignrepl/state"
 	"delsignrepl/ui"
 	"delsignrepl/wallets"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/rivo/tview"
 )
@@ -47,7 +48,13 @@ func filterWalletAddressPairs(pairs []wallets.WalletAddressPair, address string)
 	return filtered
 }
 
+// ShowSendForm shows an empty send form for the current wallet context.
 func ShowSendForm(pages *tview.Pages, appToken string) {
+	showSendForm(pages, appToken, "", "")
+}
+
+// showSendForm shows the send form with dest and amount filled in ("Edit and send again").
+func showSendForm(pages *tview.Pages, appToken, destText, amountText string) {
 	if state.Address == "" {
 		handleContextNotSet(pages)
 		return
@@ -56,6 +63,7 @@ func ShowSendForm(pages *tview.Pages, appToken string) {
 	destination := tview.NewInputField().
 		SetLabel("Destination address: ").
 		SetFieldWidth(60).
+		SetText(destText).
 		SetAcceptanceFunc(tview.InputFieldMaxLength(60))
 
 	var address string
@@ -107,9 +115,10 @@ func ShowSendForm(pages *tview.Pages, appToken string) {
 	})
 
 	amount := tview.NewInputField().
-		SetLabel("Amount (in Wei): ").
-		SetFieldWidth(60).
-		SetAcceptanceFunc(tview.InputFieldInteger)
+		SetLabel("Amount (in wei): ").
+		SetFieldWidth(80).
+		SetText(amountText).
+		SetAcceptanceFunc(weiDigitsOnly)
 
 	source := tview.NewInputField().
 		SetLabel("Source address: ").
@@ -126,7 +135,7 @@ func ShowSendForm(pages *tview.Pages, appToken string) {
 		AddFormItem(walletAddress).
 		AddFormItem(amount).
 		AddButton("Send", func() {
-			processSendForm(pages, destination.GetText(), amount.GetText(), appToken)
+			processSendForm(pages, appToken, destination.GetText(), amount.GetText())
 		}).
 		AddButton("Cancel", func() {
 			pages.SwitchToPage("Menu")
@@ -138,72 +147,181 @@ func ShowSendForm(pages *tview.Pages, appToken string) {
 	pages.SwitchToPage("SendEth")
 }
 
-func processSendForm(pages *tview.Pages, destination string, amount string, appToken string) {
-	var modal *tview.Modal
+// weiDigitsOnly lets the amount field hold decimal digits only, up to the wire format's
+// 78 characters. Leading zeros are caught by api.ParseWei on Send.
+func weiDigitsOnly(text string, _ rune) bool {
+	if len(text) > 78 {
+		return false
+	}
+	for _, c := range text {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
 
-	txnid, err := sendEth(destination, amount, appToken) // Source is from wallet context
+// validateSend checks the form's values before anything is signed.
+func validateSend(source, destText, amountText string) (dest string, wei *big.Int, err error) {
+	dest = strings.TrimSpace(destText)
+	if !api.ValidAddress(dest) {
+		return "", nil, fmt.Errorf("destination %q isn't an address: use 0x followed by 40 hex digits", dest)
+	}
+	if !api.ValidAddress(source) {
+		return "", nil, fmt.Errorf("source %q isn't an address; set the wallet context again", source)
+	}
+	if amountText == "" {
+		return "", nil, errors.New("enter an amount in wei")
+	}
+	wei, err = api.ParseWei(amountText)
 	if err != nil {
-		ui.ShowError(pages, "Error sending ETH", err, appToken, "Menu")
+		return "", nil, err
+	}
+	if wei.Sign() == 0 {
+		return "", nil, errors.New("the amount must be more than 0 wei")
+	}
+	return dest, wei, nil
+}
+
+func showModal(pages *tview.Pages, name, text string, buttons []string, done func(label string)) {
+	modal := tview.NewModal().
+		SetText(text).
+		AddButtons(buttons).
+		SetDoneFunc(func(_ int, label string) { done(label) })
+	pages.AddPage(name, modal, true, false)
+	pages.SwitchToPage(name)
+}
+
+const (
+	btnConfirm = "Confirm"
+	btnCancel  = "Cancel"
+	btnMenu    = "Menu"
+	btnRetry   = "Retry same request"
+	btnBalance = "Check balance"
+	btnEdit    = "Edit and send again"
+)
+
+func processSendForm(pages *tview.Pages, appToken, destText, amountText string) {
+	source := state.Address
+	dest, wei, err := validateSend(source, destText, amountText)
+	if err != nil {
+		showModal(pages, "SendInvalid", err.Error(), []string{"OK"}, func(string) {
+			pages.SwitchToPage("SendEth")
+		})
 		return
-	} else {
-
-		modal = tview.NewModal().
-			SetText(fmt.Sprintf("Eth send - transaction id: %s", txnid)).
-			AddButtons([]string{"OK"}).
-			SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-				if buttonLabel == "OK" {
-					pages.SwitchToPage("Menu")
-				}
-			})
 	}
-
-	pages.AddPage("NewAddress", modal, true, false)
-	pages.SwitchToPage("NewAddress")
-}
-
-type SendPayload struct {
-	SourceAddress      string   `json:"source"`
-	DestinationAddress string   `json:"dest"`
-	Amount             *big.Int `json:"amount"`
-	Signature          string   `json:"sig"`
-}
-
-func formSendEthPayload(destination string, amount string) (*SendPayload, error) {
-	amountInt := new(big.Int)
-	amountInt.SetString(amount, 10)
-
-	msg := fmt.Sprintf("%s%s%d", state.Address, destination, amountInt)
-
 	if state.PrivateKey == nil {
-		return nil, fmt.Errorf("private key not set")
-	}
-	sig, err := keys.Sign(msg, state.PrivateKey)
-	if err != nil {
-		return nil, err
+		showModal(pages, "SendInvalid", "No signing key loaded. Generate and register a key first.",
+			[]string{"OK"}, func(string) { pages.SwitchToPage("Menu") })
+		return
 	}
 
-	return &SendPayload{
-		SourceAddress:      state.Address,
-		DestinationAddress: destination,
-		Amount:             amountInt,
-		Signature:          sig,
-	}, nil
+	// Plan D8: confirm first; the request is built and signed only on Confirm.
+	text := fmt.Sprintf("Send %s wei (%s ETH)\n\nfrom %s\nto   %s?",
+		wei.String(), api.FormatEther(wei), source, dest)
+	showModal(pages, "SendConfirm", text, []string{btnConfirm, btnCancel}, func(label string) {
+		if label != btnConfirm {
+			pages.SwitchToPage("SendEth")
+			return
+		}
+		flow := NewFlow(api.New(appToken), state.PrivateKey)
+		showResult(pages, appToken, flow, flow.Confirm(source, dest, wei), dest, amountText)
+	})
 }
 
-func sendEth(destination string, amount string, appToken string) (string, error) {
-	payload, err := formSendEthPayload(destination, amount)
-	if err != nil {
-		return "", err
-	}
+// showResult shows one attempt's outcome with the buttons plan §3 lists for it.
+func showResult(pages *tview.Pages, appToken string, flow *Flow, r Result, dest, amountText string) {
+	toMenu := func() { pages.SwitchToPage("Menu") }
+	checkBalance := func() { wallets.DoGetBalance(pages, state.WalletId, state.Address, appToken) }
+	edit := func() { showSendForm(pages, appToken, dest, amountText) }
 
-	payloadJson, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
+	switch r.Outcome {
+	case Sent:
+		showModal(pages, "SendResult",
+			fmt.Sprintf("Broadcast. Transaction %s.\n\nThe balance changes once it's mined.", r.Txnid),
+			[]string{"OK"}, func(string) { toMenu() })
+
+	case NoResponse:
+		text := fmt.Sprintf("No response: %v\n\nThe transfer may or may not have happened.", r.Err)
+		buttons := []string{btnBalance, btnMenu}
+		if flow.CanRetry() {
+			buttons = append([]string{btnRetry}, buttons...)
+		} else {
+			text += "\n\nThis request has expired; check the balance before sending again."
+		}
+		showModal(pages, "SendResult", text, buttons, func(label string) {
+			switch label {
+			case btnRetry:
+				next, err := flow.Retry()
+				if err != nil {
+					// Expired while the modal was open: say so, never resend.
+					showResult(pages, appToken, flow, Result{Outcome: NoResponse, Err: r.Err}, dest, amountText)
+					return
+				}
+				showResult(pages, appToken, flow, next, dest, amountText)
+			case btnBalance:
+				checkBalance()
+			default:
+				toMenu()
+			}
+		})
+
+	case AlreadyProcessed:
+		showModal(pages, "SendResult",
+			"The server already processed this request. The transfer may have happened.\n\n"+
+				"Check the balance before sending again.",
+			[]string{btnBalance, btnMenu}, func(label string) {
+				if label == btnBalance {
+					checkBalance()
+					return
+				}
+				toMenu()
+			})
+
+	case NodeError:
+		showModal(pages, "SendResult",
+			fmt.Sprintf("Ethereum node error: %s\n\nThe transfer was most likely not sent. "+
+				"That request can't be reused.", errText(r.Err)),
+			[]string{btnEdit, btnMenu}, func(label string) {
+				if label == btnEdit {
+					edit()
+					return
+				}
+				toMenu()
+			})
+
+	case SignatureRejected:
+		var status string
+		if st, err := keys.CheckKey(api.New(appToken), keys.StoreFromEnv(), state.Email); err == nil {
+			status = "Key status: " + st.String()
+		} else {
+			status = "couldn't check the key: " + ui.Describe(err, appToken)
+		}
+		showModal(pages, "SendResult",
+			"Signature rejected. Your key may not be the registered one.\n\n"+status,
+			[]string{"OK"}, func(string) { toMenu() })
+
+	case Rejected:
+		showModal(pages, "SendResult",
+			fmt.Sprintf("Request rejected: %s", errText(r.Err)),
+			[]string{btnEdit, btnMenu}, func(label string) {
+				if label == btnEdit {
+					edit()
+					return
+				}
+				toMenu()
+			})
+
+	default:
+		ui.ShowError(pages, "Error sending ETH", r.Err, appToken, "Menu")
 	}
-	// Phase 4 replaces this payload with the new signed format (api.SendRequest).
-	result, err := api.New(appToken).Send(payloadJson)
-	if err != nil {
-		return "", err
+}
+
+// errText is the server's text for an api.Error, or the error itself.
+func errText(err error) string {
+	var e *api.Error
+	if errors.As(err, &e) && e.Text != "" {
+		return e.Text
 	}
-	return result.Txnid, nil
+	return err.Error()
 }

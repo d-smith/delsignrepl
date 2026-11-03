@@ -20,8 +20,8 @@ func DoGetBalance(pages *tview.Pages, walletId int, address string, appToken str
 			ui.ShowError(pages, "Error retrieving balance", err, appToken, "Menu")
 			return
 		} else {
-			msg = fmt.Sprintf("Balance for wallet %d, address %s is %d wei (%d ether)",
-				walletId, address, balance, weiToEther(balance))
+			msg = fmt.Sprintf("Balance for wallet %d, address %s is %s wei (%s ETH)",
+				walletId, address, balance.String(), api.FormatEther(balance))
 		}
 
 	}
@@ -46,14 +46,9 @@ func getBalanceForAddress(address string, appToken string) (*big.Int, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Amounts are decimal strings on the wire. Phase 4 replaces this with api.ParseWei.
-	amount, ok := new(big.Int).SetString(b.Amount, 10)
-	if !ok {
-		return nil, fmt.Errorf("server sent an invalid amount %q", b.Amount)
+	amount, err := api.ParseWei(b.Amount)
+	if err != nil {
+		return nil, fmt.Errorf("server sent an invalid amount: %w", err)
 	}
 	return amount, nil
-}
-
-func weiToEther(val *big.Int) *big.Int {
-	return new(big.Int).Div(val, big.NewInt(1e18))
 }

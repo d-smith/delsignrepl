@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/gdamore/tcell/v2 v2.6.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/google/uuid v1.6.0
 	github.com/rivo/tview v0.0.0-20230928053139-9bc1d28d88a9
 )
 

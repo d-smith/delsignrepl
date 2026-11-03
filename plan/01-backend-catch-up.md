@@ -708,20 +708,20 @@ Result (2026-11-02):
 
 ### Phase 4: amounts and sends
 
-- [ ] `api.ParseWei`, `api.FormatEther` and `api.ValidAddress`. Balance decodes `amount`
+- [x] `api.ParseWei`, `api.FormatEther` and `api.ValidAddress`. Balance decodes `amount`
       as a string and shows wei and ETH. Delete `weiToEther`.
-- [ ] Send form:
+- [x] Send form:
   - amount input in wei, digits only (D7);
   - destination is trimmed and validated before signing;
   - zero and empty amounts are refused.
-- [ ] Confirmation modal (D8).
-- [ ] `go get github.com/google/uuid` (D5).
-- [ ] `api.SendMessage` and `send.BuildSend` (D9, expiry 120 s), marshalled once, bytes
+- [x] Confirmation modal (D8).
+- [x] `go get github.com/google/uuid` (D5).
+- [x] `api.SendMessage` and `send.BuildSend` (D9, expiry 120 s), marshalled once, bytes
       kept.
-- [ ] The send outcome flow from §3, "Errors and retries": 200, no response with retry of
+- [x] The send outcome flow from §3, "Errors and retries": 200, no response with retry of
       the same bytes until expiry, 409, 502 with "Edit and send again", 401 with the key
       check, 400 and 403.
-- [ ] Tests:
+- [x] Tests:
   - vector checks 4 and 7 pass;
   - `ParseWei` rejects `-1`, `007`, `+3`, `1e3`, `""` and 2^256, and accepts 2^256-1;
   - `FormatEther` gives exact results for 1 wei, 0.9 ETH and a large amount;
@@ -738,6 +738,35 @@ Result (2026-11-02):
 - the balance changes after mining (Anvil mines straight away by default);
 - a send with insufficient funds shows the 502 text;
 - stopping the backend mid-send shows the "no response" flow.
+
+Result (2026-11-03):
+- **Tests:** `go test ./...` is fully green, including vector checks 4 and 7, so no red
+  is left from Phase 1. Stable over 3 runs.
+- **Manual check not yet run:** no backend on `localhost:3010` (Anvil and `cast` are
+  installed).
+- **Files:**
+  - `api/amount.go`: `ParseWei`, `FormatEther`, `ValidAddress` and `MaxWei`;
+  - `api/send.go`: `SendMessage`;
+  - `send/build.go`: `BuildSend` and `NewRequestID` (google/uuid v1.6.0, a direct require);
+  - `send/flow.go`: `Flow`, which owns one form's requests. `Confirm` builds a new
+    request and posts it; `Retry` resends the kept bytes, only after a no-response
+    outcome and before expiry;
+  - `send/send.go`: the form, validation, confirmation and outcome modals;
+  - `wallets/balances.go`: `ParseWei` and wei + ETH display. `weiToEther` is gone.
+- **How the tests work:** the flow tests run against a fake `POST /wallets/send` that
+  checks the signature with the standard library, replays scripted statuses, and can drop
+  a connection. They cover: identical bytes on retry, no retry at expiry, a 409 never
+  leading to a new id, a 502 leading to a new id only on a new `Confirm`, and a wrong key
+  giving 401.
+- **Choices beyond the task list:**
+  - the amount field accepts digits only, up to 78 characters. Leading zeros are refused
+    by `ParseWei` on Send, with a message;
+  - a 400 also offers "Edit and send again", since an expiry problem is the likeliest
+    cause;
+  - if the request expires while the no-response modal is open, pressing Retry shows the
+    expired text instead of resending;
+  - `BuildSend` also refuses a nil key, a non-positive or oversized amount, and invalid
+    addresses.
 
 ### Phase 5: wrap-up
 
