@@ -36,6 +36,11 @@ type Shell struct {
 	// Token returns the current API token, for the 403 check in Error. Nil means none.
 	Token func() string
 
+	headerFunc func() string // recomputes the header before each draw, if set
+	homeFunc   func() string // recomputes Home's text before each draw, if set
+	homeView   *tview.TextView
+	homeLast   string
+
 	history []string // screens to go Back to, oldest first
 	modals  int      // counter for unique modal page names
 	mouse   bool
@@ -69,6 +74,10 @@ func NewShell(app *tview.Application) *Shell {
 	s.Content.SetChangedFunc(s.focusFront)
 	s.Content.AddPage(HelpPage, helpView(), true, false)
 	app.SetInputCapture(s.globalKeys)
+	app.SetBeforeDrawFunc(func(tcell.Screen) bool {
+		s.refreshText()
+		return false
+	})
 
 	s.SetHeader("Not logged in")
 	s.drawFooter()
@@ -85,6 +94,32 @@ func (s *Shell) AddAction(label string, key rune, do func()) *Shell {
 // SetHome sets the Home screen's content.
 func (s *Shell) SetHome(p tview.Primitive) {
 	s.Content.AddPage(HomePage, p, true, s.front() == "" || s.front() == HomePage)
+}
+
+// SetHeaderFunc makes the header show f's result, recomputed before every draw, so it
+// never goes stale whatever changed the session.
+func (s *Shell) SetHeaderFunc(f func() string) {
+	s.headerFunc = f
+}
+
+// SetHomeFunc makes Home a text view showing f's result, recomputed before every draw.
+func (s *Shell) SetHomeFunc(f func() string) {
+	s.homeFunc = f
+	s.homeView = tview.NewTextView()
+	s.SetHome(s.homeView)
+}
+
+func (s *Shell) refreshText() {
+	if s.headerFunc != nil {
+		s.Header.SetText(tview.Escape(s.headerFunc()))
+	}
+	if s.homeFunc != nil {
+		// Only on a change, so that redraws don't reset Home's scroll position.
+		if text := s.homeFunc(); text != s.homeLast {
+			s.homeLast = text
+			s.homeView.SetText(tview.Escape(text))
+		}
+	}
 }
 
 // Show opens screen name, replacing any page of that name if p is non-nil, or switching

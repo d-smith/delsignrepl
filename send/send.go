@@ -183,12 +183,15 @@ func showResult(sh *ui.Shell, flow *Flow, r Result, dest, amountText string) {
 	toMenu := sh.Home
 	checkBalance := func() {
 		sh.Home()
-		wallets.DoGetBalance(sh, state.WalletId, state.Address)
+		wallets.DoGetBalance(sh)
 	}
 	edit := func() { showSendForm(sh, dest, amountText) }
 
 	switch r.Outcome {
 	case Sent:
+		// Anvil mines at once, so the header's balance can catch up now. A failure only
+		// leaves it saying "?".
+		_ = wallets.RefreshBalance(sh.Token())
 		sh.Modal(
 			fmt.Sprintf("Broadcast. Transaction %s.\n\nThe balance changes once it's mined.", r.Txnid),
 			[]string{"OK"}, func(string) { toMenu() })

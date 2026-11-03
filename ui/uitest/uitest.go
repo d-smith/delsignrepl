@@ -4,6 +4,7 @@ package uitest
 
 import (
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,6 +17,9 @@ type Sim struct {
 	t      *testing.T
 	App    *tview.Application
 	Screen tcell.SimulationScreen
+
+	sent int64        // key events injected
+	seen atomic.Int64 // key events the app's event loop has taken
 }
 
 // Start runs run (which must call app.Run, directly or not) on a w x h simulation screen
@@ -25,6 +29,20 @@ func Start(t *testing.T, app *tview.Application, w, h int, run func() error) *Si
 	scr := tcell.NewSimulationScreen("UTF-8")
 	app.SetScreen(scr)
 	scr.SetSize(w, h)
+	s := &Sim{t: t, App: app, Screen: scr}
+
+	// Count key events as the app takes them, so Key and Type can wait for each one to
+	// be handled. tview reads keys and queued updates from separate channels, so an
+	// update round trip alone doesn't prove a typed key has been handled.
+	prev := app.GetInputCapture()
+	app.SetInputCapture(func(ev *tcell.EventKey) *tcell.EventKey {
+		s.seen.Add(1)
+		if prev != nil {
+			return prev(ev)
+		}
+		return ev
+	})
+
 	done := make(chan error, 1)
 	go func() { done <- run() }()
 	t.Cleanup(func() {
@@ -35,7 +53,6 @@ func Start(t *testing.T, app *tview.Application, w, h int, run func() error) *Si
 			t.Error("app didn't stop")
 		}
 	})
-	s := &Sim{t: t, App: app, Screen: scr}
 	s.Settle()
 	return s
 }
@@ -60,21 +77,40 @@ func (s *Sim) Do(f func()) {
 	s.Settle()
 }
 
-// Key injects a special key (Esc, Enter, Tab...) and settles.
+// Key injects a special key (Esc, Enter, Tab...), waits for it to be handled, and
+// settles.
 func (s *Sim) Key(k tcell.Key) {
 	s.t.Helper()
-	s.Screen.InjectKey(k, 0, tcell.ModNone)
-	time.Sleep(10 * time.Millisecond) // the key travels through tcell's event queue
-	s.Settle()
+	s.inject(k, 0)
+	s.waitHandled()
 }
 
-// Type injects each rune of text as a key press and settles.
+// Type injects each rune of text as a key press, waits for them all to be handled, and
+// settles.
 func (s *Sim) Type(text string) {
 	s.t.Helper()
 	for _, r := range text {
-		s.Screen.InjectKey(tcell.KeyRune, r, tcell.ModNone)
+		s.inject(tcell.KeyRune, r)
 	}
-	time.Sleep(10 * time.Millisecond)
+	s.waitHandled()
+}
+
+func (s *Sim) inject(k tcell.Key, r rune) {
+	s.sent++
+	s.Screen.InjectKey(k, r, tcell.ModNone)
+}
+
+// waitHandled waits until the app has taken every injected key, then settles: the
+// update queued by Settle runs after the last key's handler has returned.
+func (s *Sim) waitHandled() {
+	s.t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for s.seen.Load() < s.sent {
+		if time.Now().After(deadline) {
+			s.t.Fatalf("app took %d of %d keys", s.seen.Load(), s.sent)
+		}
+		time.Sleep(time.Millisecond)
+	}
 	s.Settle()
 }
 

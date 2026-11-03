@@ -2,24 +2,25 @@ package wallets
 
 import (
 	"delsignrepl/api"
+	"delsignrepl/state"
 	"delsignrepl/ui"
 	"fmt"
 	"math/big"
 )
 
-// DoGetBalance shows the balance of the context address in wei and ETH.
-func DoGetBalance(sh *ui.Shell, walletId int, address string) {
-	if walletId == 0 || address == "" {
+// DoGetBalance fetches and shows the context address's balance in wei and ETH. The
+// header shows it too.
+func DoGetBalance(sh *ui.Shell) {
+	if state.Address == "" {
 		sh.Message("Wallet and address context not set. Choose one with Set wallet context (c).")
 		return
 	}
-	balance, err := getBalanceForAddress(address, sh.Token())
-	if err != nil {
+	if err := RefreshBalance(sh.Token()); err != nil {
 		sh.Error("Error retrieving balance", err)
 		return
 	}
 	sh.Message(fmt.Sprintf("Balance for wallet %d, address %s is %s wei (%s ETH)",
-		walletId, address, balance.String(), api.FormatEther(balance)))
+		state.WalletId, state.Address, state.Balance.String(), api.FormatEther(state.Balance)))
 }
 
 func getBalanceForAddress(address string, appToken string) (*big.Int, error) {

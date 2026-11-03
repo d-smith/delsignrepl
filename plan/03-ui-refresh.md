@@ -175,6 +175,49 @@ Global keys go in `app.SetInputCapture`:
 
      All are stable over 10 runs and under `-race`.
 2. **Context.** Session fields, the header and Home, refreshed at the points listed under Design 3.
+
+   Result (2026-11-03):
+   - **`state` is now a pure session package.** It imports only `api`. It holds `Email`,
+     `Token` (replacing `main.go`'s `appToken`), `PrivateKey`, `WalletId`, `Address`,
+     `KeyStatus`/`KeyNext`/`KeyCheckedAt`, and `Balance`/`BalanceAt`/`BalanceErr`.
+     - `Login(email, token)` clears the previous user's context and key status when the
+       email changes.
+     - `SetContext` forgets the old balance.
+     - `HeaderText`, `HomeText`, `NextStep` and `ShortAddress` render it.
+   - **Import cycle avoided:** the wallet context picker moved from `state` to
+     `wallets.DoSetContext`, so `state` no longer imports `wallets` or `ui`. The key status
+     is stored as text (`Status.Label()` and `Status.Next()`, in `keys/keypages.go`), so
+     `state` doesn't need the `keys.Status` type. `keys/keyreg.go` is unchanged.
+   - **Header and Home are recomputed before every draw** (`Shell.SetHeaderFunc` and
+     `SetHomeFunc` via `app.SetBeforeDrawFunc`), so they can't go stale whichever screen
+     changed the session. Home's text is only reset when it changes, to keep its scroll.
+   - **Refresh points:**
+     - key status: after login, Key status, generating a key, registering, and Refresh;
+     - balance: after setting the context, Get balance, a successful send, and Refresh.
+
+     **Refresh** is a sidebar action on `R`, since the sidebar has the focus on Home. It
+     reports "Refreshed at ..." in the footer.
+   - **Home's "Next" step**, in order:
+     1. log in;
+     2. the key's step (generate, register, finish a rotation, or the mismatch warning);
+     3. create and choose a wallet and address;
+     4. fund it from Anvil if the balance is 0;
+     5. send.
+   - **Test harness fix:** tview reads keys and queued updates from separate channels,
+     so `Settle` alone could finish while typed keys were still waiting, which broke a
+     test typing a ~250-character JWT. `uitest` now counts key events through the app's
+     input capture, and `Key` and `Type` wait until every injected key has been handled.
+   - **Tests:**
+     - `state/state_test.go`: header, Home and next step across the session's stages, a
+       failed balance fetch, a login as someone else clearing the session, and
+       `SetContext` dropping the balance;
+     - `main_test.go`, `TestHeaderAndHomeShowTheSession`: type a JWT into the real login
+       form, see "key: none on this machine" and its next step, save a key outside the
+       app and press `R` to see "not registered", then set the context and see the
+       wallet, short address and 0.049 ETH in the header, with the full address and wei
+       on Home.
+
+     All are stable over 10 runs and under `-race`.
 3. **Wallets and Send.** The table with picker mode; the Send screen with the ETH preview.
 4. **Keys and Log in.** The combined Keys screen; separate Email and Token fields.
 5. **Activity and copy.** The activity log, the copy keys and the mouse toggle hint.

@@ -6,6 +6,7 @@ import (
 	"delsignrepl/ui"
 	"errors"
 	"fmt"
+	"time"
 )
 
 const lostKeyWarning = "This file is your only way to authorise sends. If it's lost, funds in your " +
@@ -25,7 +26,7 @@ func loadCurrent(s Store) error {
 // OnLogin runs after a token is accepted: it loads this email's key and shows whether it
 // matches the registered one.
 func OnLogin(sh *ui.Shell, email string) {
-	state.Email = email
+	state.Login(email, sh.Token())
 	sh.Home()
 	if err := loadCurrent(StoreFromEnv()); err != nil {
 		sh.Error("Error loading your key", err)
@@ -40,7 +41,7 @@ func DoKeyStatus(sh *ui.Shell) {
 		sh.Message("Log in first (t).")
 		return
 	}
-	st, err := CheckKey(api.New(sh.Token()), StoreFromEnv(), state.Email)
+	st, err := RefreshKeyStatus(sh.Token())
 	if err != nil {
 		sh.Error("Error checking your key", err)
 		return
@@ -75,6 +76,7 @@ func DoKeyGeneration(sh *ui.Shell) {
 			return
 		}
 		state.PrivateKey = k
+		refreshQuietly(sh)
 		path, _ := s.Path(state.Email, Current)
 		sh.Message(fmt.Sprintf("Signing key saved to %s.\n\n%s\n\nNow register it (r).", path, lostKeyWarning))
 		return
@@ -104,6 +106,7 @@ func DoKeyGeneration(sh *ui.Shell) {
 				fail(err)
 				return
 			}
+			refreshQuietly(sh)
 			path, _ := s.Path(state.Email, Pending)
 			sh.Message(fmt.Sprintf("Replacement key saved to %s.\n\n%s\n\nRegister it (r) to switch to it.", path, lostKeyWarning))
 		})
@@ -129,5 +132,61 @@ func DoKeyRegistration(sh *ui.Shell) {
 		sh.Error("Key registered, but loading it failed", err)
 		return
 	}
+	refreshQuietly(sh)
 	sh.Message(out.String())
+}
+
+// Label is the status's short form, for the header.
+func (st Status) Label() string {
+	switch st {
+	case NoLocalKey:
+		return "none on this machine"
+	case NotRegistered:
+		return "not registered"
+	case Matches:
+		return "matches"
+	case PendingReady:
+		return "matches, replacement waiting"
+	case FinishRotation:
+		return "replacement registered, finish it"
+	case Mismatch:
+		return "MISMATCH"
+	}
+	return "unknown"
+}
+
+// Next is the step the status calls for, or "" if none.
+func (st Status) Next() string {
+	switch st {
+	case NoLocalKey:
+		return "generate a signing key (k), then register it (r)."
+	case NotRegistered:
+		return "register your key (r)."
+	case PendingReady:
+		return "register the replacement key (r) to switch to it."
+	case FinishRotation:
+		return "register (r) to finish switching to the replacement key."
+	case Mismatch:
+		return "this machine's key isn't the registered one, so sends will be rejected. " +
+			"Use the right key file, or ask the backend owner to reset your account."
+	}
+	return ""
+}
+
+// RefreshKeyStatus checks the key (read-only) and records the result in state for the
+// header and Home.
+func RefreshKeyStatus(token string) (Status, error) {
+	st, err := CheckKey(api.New(token), StoreFromEnv(), state.Email)
+	if err != nil {
+		state.KeyStatus, state.KeyNext = "couldn't check", ""
+		return st, err
+	}
+	state.KeyStatus, state.KeyNext, state.KeyCheckedAt = st.Label(), st.Next(), time.Now()
+	return st, nil
+}
+
+// refreshQuietly updates the key status after a local change. A failure only leaves the
+// header saying "couldn't check"; the action's own message still shows.
+func refreshQuietly(sh *ui.Shell) {
+	_, _ = RefreshKeyStatus(sh.Token())
 }

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"delsignrepl/keys"
 	"delsignrepl/state"
+	"delsignrepl/token"
 	"delsignrepl/ui"
 	"delsignrepl/ui/uitest"
 	"encoding/json"
@@ -9,10 +11,13 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
+
+const testEmail = "a@example.com"
 
 var (
 	addr1 = "0x" + strings.Repeat("1a", 20)
@@ -29,6 +34,11 @@ func fakeBackend(t *testing.T) {
 		case "POST /api/v1/wallets":
 			w.WriteHeader(201)
 			json.NewEncoder(w).Encode(map[string]int{"id": 3})
+		case "GET /api/v1/authping":
+		case "GET /api/v1/users/" + testEmail:
+			http.Error(w, "No key registered", 404)
+		case "GET /api/v1/wallets/balance/" + addr1:
+			json.NewEncoder(w).Encode(map[string]string{"address": addr1, "amount": "49000000000000000"})
 		case "GET /api/v1/walletctx":
 			json.NewEncoder(w).Encode([]map[string]any{
 				{"walletId": 1, "address": addr1}, {"walletId": 2, "address": addr2}})
@@ -40,6 +50,19 @@ func fakeBackend(t *testing.T) {
 	t.Cleanup(srv.Close)
 	t.Setenv("DELSIGN_API_URL", srv.URL)
 	t.Setenv("DELSIGN_DEV_JWT_SECRET", "")
+	t.Setenv("DELSIGN_KEY_DIR", t.TempDir())
+	resetSession(t)
+}
+
+// resetSession clears the session globals before and after a test.
+func resetSession(t *testing.T) {
+	t.Helper()
+	clear := func() {
+		state.Login("", "")
+		state.SetContext(0, "")
+	}
+	clear()
+	t.Cleanup(clear)
 }
 
 func startApp(t *testing.T) (*ui.Shell, *uitest.Sim) {
@@ -67,7 +90,7 @@ func TestAppStartsOnLoginInsideShell(t *testing.T) {
 	sim.Type("i") // Key status, before logging in
 	sim.Shows("Log in first")
 	sim.Key(tcell.KeyEnter)
-	sim.Shows("Choose an action")
+	sim.Shows("Next: log in (t).")
 	if sim.App.GetFocus() != sh.Sidebar {
 		t.Error("OK on the modal should return to Home and the sidebar")
 	}
@@ -85,8 +108,7 @@ func TestEscFromEveryScreen(t *testing.T) {
 	fakeBackend(t)
 	sh, sim := startApp(t)
 	sim.Key(tcell.KeyEscape) // leave login
-	sim.Do(func() { state.WalletId, state.Address = 1, addr1 })
-	t.Cleanup(func() { state.WalletId, state.Address = 0, "" })
+	sim.Do(func() { state.SetContext(1, addr1) })
 
 	for _, c := range []struct{ key, page, shows string }{
 		{"a", "Address Gen", "Wallet ID:"},
@@ -131,8 +153,7 @@ func TestSendPickerReturnsToForm(t *testing.T) {
 	fakeBackend(t)
 	sh, sim := startApp(t)
 	sim.Key(tcell.KeyEscape)
-	sim.Do(func() { state.WalletId, state.Address = 1, addr1 })
-	t.Cleanup(func() { state.WalletId, state.Address = 0, "" })
+	sim.Do(func() { state.SetContext(1, addr1) })
 
 	sim.Type("s")
 	sim.Key(tcell.KeyTab) // destination -> "Use Wallet Address"
@@ -152,4 +173,46 @@ func TestSendPickerReturnsToForm(t *testing.T) {
 	if sh.Current() != ui.HomePage {
 		t.Errorf("Esc from the send form went to %q", sh.Current())
 	}
+}
+
+// Logging in through the form, refreshing, and setting the context fill the header and
+// Home from the session, with no modal needed to see where you are.
+func TestHeaderAndHomeShowTheSession(t *testing.T) {
+	fakeBackend(t)
+	sh, sim := startApp(t)
+	sim.Shows("Not logged in")
+
+	tok, err := token.GenerateToken(time.Hour, &token.TokenFields{Id: "x", Email: testEmail}, "any")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sim.Type(tok)
+	sim.Key(tcell.KeyTab)   // Save
+	sim.Key(tcell.KeyEnter) // log in: key status modal over Home
+	sim.Key(tcell.KeyEnter) // OK
+	if sh.Current() != ui.HomePage {
+		t.Fatalf("after login, on %q", sh.Current())
+	}
+	sim.Shows(testEmail+"  |  key: none on this machine  |  no wallet context",
+		"Next: generate a signing key (k)")
+
+	// A key made outside the app: Refresh (R) picks it up and checks it.
+	k, err := keys.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := keys.StoreFromEnv().Save(testEmail, keys.Current, k); err != nil {
+		t.Fatal(err)
+	}
+	sim.Type("R")
+	sim.Shows("key: not registered", "Next: register your key (r).", "Refreshed at")
+
+	sim.Type("c")
+	sim.Key(tcell.KeyTab)   // Use this
+	sim.Key(tcell.KeyEnter) // context set, balance fetched, back Home
+	if sh.Current() != ui.HomePage {
+		t.Fatalf("after setting the context, on %q", sh.Current())
+	}
+	sim.Shows("wallet 1 0x1a1a...1a1a  |  0.049 ETH",
+		"Address    "+addr1, "0.049 ETH (49000000000000000 wei)")
 }
