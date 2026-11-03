@@ -742,8 +742,8 @@ Result (2026-11-02):
 Result (2026-11-03):
 - **Tests:** `go test ./...` is fully green, including vector checks 4 and 7, so no red
   is left from Phase 1. Stable over 3 runs.
-- **Manual check not yet run:** no backend on `localhost:3010` (Anvil and `cast` are
-  installed).
+- **Manual check:** run by the user end to end against a live backend and Anvil
+  (2026-11-03).
 - **Files:**
   - `api/amount.go`: `ParseWei`, `FormatEther`, `ValidAddress` and `MaxWei`;
   - `api/send.go`: `SendMessage`;
@@ -770,7 +770,7 @@ Result (2026-11-03):
 
 ### Phase 5: wrap-up
 
-- [ ] Update `readme.md`:
+- [x] Update `readme.md`:
   - **Configuration:** `DELSIGN_API_URL`, `DELSIGN_KEY_DIR`, `DELSIGN_DEV_JWT_SECRET`.
   - **Dev tokens (cheat code):**
     - set `DELSIGN_DEV_JWT_SECRET` to the backend's `DELSIGN_JWT_SECRET`;
@@ -786,8 +786,8 @@ Result (2026-11-03):
   - **Dev chain:** replace the Ganache notes (`readme.md:25-36`) with Anvil: start it, fund
     an app address with `cast send … --value …`, check a balance with `cast balance`. Check
     the exact commands against the installed Foundry version when writing them.
-- [ ] A last pass for leftovers: `grep -rn 'localhost:3010\|\*big.Int.*json\|ParseInt\|float64\|"secret"'`.
-- [ ] A boundary check:
+- [x] A last pass for leftovers: `grep -rn 'localhost:3010\|\*big.Int.*json\|ParseInt\|float64\|"secret"'`.
+- [x] A boundary check:
   - `go.mod` and `go.sum` have no `require` or `replace` for the delsignbackend module;
   - `go list -deps ./...` shows only this module, the standard library and the agreed
     third-party libraries;
@@ -797,6 +797,21 @@ Result (2026-11-03):
 
 **Done when:** the full manual run from Phases 2-4 passes in one session, after a restart,
 and after a rotation. A reader can set the app up from the readme alone.
+
+Result (2026-11-03):
+- **Manual run:** the user ran Phases 2-4 end to end against a live backend and Anvil
+  before Phase 5, and reported it working.
+- **Readme:** replaced the Ganache notes with Running it, Configuration, Dev tokens, Key
+  files, Using the app, Dev chain (Anvil) and Tests. The `openssl genpkey` steps were
+  checked: the key loads through `keys.Store`, and a `0644` copy is refused with the
+  `chmod 600` hint. The `cast` commands were checked against cast 1.8.6.
+- **Leftovers:** the grep finds only legitimate hits: `api.DefaultBaseURL`, the JWT `exp`
+  claim (`float64` is how JSON decodes it), a test-only `"secret"`, and a comment.
+- **Boundary:** no `delsignbackend` in `go.mod` or `go.sum`, and no `replace`. The
+  non-standard dependencies are this module, tview/tcell (and their `x/` packages),
+  golang-jwt and google/uuid. Only `api` imports `net/http`.
+- **Gap requests:** drafted in `plan/02-backend-requests.md`, ready to forward. That task
+  stays unticked until they're sent.
 
 ---
 
