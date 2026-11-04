@@ -107,13 +107,13 @@ func TestCheatCodeOnlyWithDevSecret(t *testing.T) {
 	var tok string
 	t.Setenv(DevSecretEnv, "")
 	form := GetTokenInputForm(ui.NewShell(tview.NewApplication()), &tok, func(string) {})
-	if form.GetFormItemByLabel(CheatCodeLabel) != nil {
+	if form.GetButtonIndex(CheatCodeLabel) >= 0 {
 		t.Error("cheat code shown without " + DevSecretEnv)
 	}
 
 	t.Setenv(DevSecretEnv, "s3cret")
 	form = GetTokenInputForm(ui.NewShell(tview.NewApplication()), &tok, func(string) {})
-	if form.GetFormItemByLabel(CheatCodeLabel) == nil {
+	if form.GetButtonIndex(CheatCodeLabel) < 0 {
 		t.Error("cheat code hidden although " + DevSecretEnv + " is set")
 	}
 }

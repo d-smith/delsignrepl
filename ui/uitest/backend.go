@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,13 +14,15 @@ import (
 
 // Backend is a stateful fake of the delsign wallet endpoints, written from
 // openapi.yaml's paths and shapes: wallets, addresses, wallet context, balances,
-// /authping, and GET /users (always 404: no key registered).
+// /authping, and key registration (POST /keyreg, GET /users). It records keys without
+// checking signatures; keys/register_test.go covers those.
 type Backend struct {
 	t        *testing.T
 	mu       sync.Mutex
 	wallets  []int
 	addrs    map[int][]string // wallet -> addresses, in creation order
 	Balances map[string]string
+	keys     map[string]string // email -> registered pubkey hex
 	next     int
 }
 
@@ -27,7 +30,7 @@ type Backend struct {
 // wallets maps wallet ids to their addresses; Address(n) makes deterministic addresses.
 func StartBackend(t *testing.T, wallets map[int][]string, order ...int) *Backend {
 	t.Helper()
-	b := &Backend{t: t, addrs: map[int][]string{}, Balances: map[string]string{}, next: 100}
+	b := &Backend{t: t, addrs: map[int][]string{}, Balances: map[string]string{}, keys: map[string]string{}, next: 100}
 	for _, id := range order {
 		b.wallets = append(b.wallets, id)
 		b.addrs[id] = wallets[id]
@@ -50,7 +53,24 @@ func (b *Backend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == "GET" && path == "/authping":
 	case r.Method == "GET" && strings.HasPrefix(path, "/users/"):
-		http.Error(w, "No key registered", 404)
+		email, _ := url.PathUnescape(strings.TrimPrefix(path, "/users/"))
+		pub, ok := b.keys[email]
+		if !ok {
+			http.Error(w, "No key registered", 404)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"email": email, "pubkey": pub})
+	case r.Method == "POST" && path == "/keyreg":
+		var reg struct{ Email, Pubkey, Sig4reg, Sig4rotate string }
+		if err := json.NewDecoder(r.Body).Decode(&reg); err != nil || reg.Pubkey == "" || reg.Sig4reg == "" {
+			http.Error(w, "bad body", 400)
+			return
+		}
+		if _, ok := b.keys[reg.Email]; ok && reg.Sig4rotate == "" {
+			http.Error(w, "A key is already registered; replacing it needs sig4rotate from the current key", 403)
+			return
+		}
+		b.keys[reg.Email] = reg.Pubkey
 	case r.Method == "GET" && path == "/wallets":
 		json.NewEncoder(w).Encode(append([]int{}, b.wallets...))
 	case r.Method == "POST" && path == "/wallets":
@@ -104,4 +124,11 @@ func (b *Backend) Addresses(id int) []string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return append([]string{}, b.addrs[id]...)
+}
+
+// Registered returns the public key registered for email ("" if none).
+func (b *Backend) Registered(email string) string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.keys[email]
 }

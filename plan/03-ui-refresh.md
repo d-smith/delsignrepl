@@ -271,6 +271,40 @@ Global keys go in `app.SetInputCapture`:
 
      All are stable over 10 runs, and every package is clean under `-race`.
 4. **Keys and Log in.** The combined Keys screen; separate Email and Token fields.
+
+   Result (2026-11-04):
+   - **Keys screen** (`keys.ShowKeys`, sidebar `k`): the email, status label and full
+     description, when it was checked, the current and replacement key file paths (or
+     "none"), and the next step. Buttons and keys: **g** generate (a replacement if a key
+     exists, as before), **r** register or rotate, **R** check again. Opening it checks
+     the key. The text is a `ui.LiveText`, recomputed when drawn, so it follows each
+     action's result under its dialog. It replaces the Generate key, Register key and Key
+     status items. The generate and register logic, the lost-key warning and the
+     pending-key refusal are unchanged.
+   - **Login** no longer opens a key status dialog: it goes Home, where the header and
+     Next show the result, and the footer says "Logged in as ...".
+   - **Hints:** `Status.Next()` (shown on Home) names the screen and the key, e.g. "open
+     Keys (k), generate a signing key (g), then register it (r)". `Status.String()` and
+     `ErrNoKey` lost their `(k)`/`(r)`, which were wrong outside the old menu. The Send
+     screen's no-key message points to Keys (k). Help lists the Keys and Wallets keys.
+   - **Login form** (`token/input.go`): a **Token** field (trimmed paste, placeholder)
+     and, with the dev secret, an **Email** field before it and an **Apply Cheat Code**
+     button before Save. The button replaces the checkbox, which was broken on tview
+     0.42: its change handler runs before the value is stored, so un-ticking it after an
+     invalid email didn't stick. Editing the email takes back a token minted for the old
+     one. Saving an empty token with the dev secret says what to do.
+   - `ui.LiveText` also backs Home, replacing the shell's own Home text cache.
+   - **Tests:**
+     - `ui/uitest/backend.go` records key registrations (`POST /keyreg`, `GET /users`),
+       without checking signatures (`keys/register_test.go` does);
+     - `main_test.go`: the Keys screen through generate, register, replace and rotate,
+       with the status and paths after each, and `R`; the cheat code login, including
+       the empty-email message and editing the email clearing the token (fails with the
+       clearing removed); login landing on Home; Keys in the Esc-from-every-screen test.
+
+     All are stable over 10 runs, and every package is clean under `-race`.
+   - **For Phase 6:** the readme still describes the checkbox and the Generate key (`k`)
+     / Register key (`r`) / Key status (`i`) items.
 5. **Activity and copy.** The activity log, the copy keys and the mouse toggle hint.
 6. **Readme.** Update "Using the app" and the key hints. Note that mouse off means plain selection.
 

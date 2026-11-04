@@ -22,9 +22,10 @@ var PrivateKey *rsa.PrivateKey
 var WalletId int
 var Address string
 
-// KeyStatus is a short label for the last key check ("" if not checked), and KeyNext the
-// step it calls for ("" if none). keys.RefreshKeyStatus sets them.
-var KeyStatus, KeyNext string
+// KeyStatus is a short label for the last key check ("" if not checked), KeyDetail its
+// full description, and KeyNext the step it calls for ("" if none).
+// keys.RefreshKeyStatus sets them.
+var KeyStatus, KeyDetail, KeyNext string
 var KeyCheckedAt time.Time
 
 // Balance is the context address's balance in wei at BalanceAt, or nil if not fetched.
@@ -39,7 +40,7 @@ func Login(email, token string) {
 	if email != Email {
 		PrivateKey = nil
 		SetContext(0, "")
-		KeyStatus, KeyNext, KeyCheckedAt = "", "", time.Time{}
+		KeyStatus, KeyDetail, KeyNext, KeyCheckedAt = "", "", "", time.Time{}
 	}
 	Email, Token = email, token
 }

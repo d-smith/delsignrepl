@@ -14,7 +14,7 @@ func reset(t *testing.T) {
 	clear := func() {
 		Email, Token, PrivateKey = "", "", nil
 		SetContext(0, "")
-		KeyStatus, KeyNext, KeyCheckedAt = "", "", time.Time{}
+		KeyStatus, KeyDetail, KeyNext, KeyCheckedAt = "", "", "", time.Time{}
 	}
 	clear()
 	t.Cleanup(clear)

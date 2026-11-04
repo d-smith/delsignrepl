@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -42,4 +43,28 @@ func unwrap(p tview.Primitive) tview.Primitive {
 		}
 		p = u.Unwrap()
 	}
+}
+
+// LiveText is a text view that shows f's result, recomputed each time it's drawn, so it
+// never goes stale whatever changed the session. The text is set only when it changes,
+// so redraws don't reset the scroll position.
+type LiveText struct {
+	*tview.TextView
+	f    func() string
+	last string
+	set  bool
+}
+
+// NewLiveText returns a LiveText showing f's result.
+func NewLiveText(f func() string) *LiveText {
+	return &LiveText{TextView: tview.NewTextView(), f: f}
+}
+
+// Draw updates the text, then draws the view.
+func (l *LiveText) Draw(screen tcell.Screen) {
+	if text := l.f(); !l.set || text != l.last {
+		l.last, l.set = text, true
+		l.TextView.SetText(tview.Escape(text))
+	}
+	l.TextView.Draw(screen)
 }

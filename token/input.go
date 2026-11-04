@@ -13,7 +13,7 @@ import (
 	"github.com/rivo/tview"
 )
 
-// CheatCodeLabel labels the dev-only checkbox that mints a token (see DevSecret).
+// CheatCodeLabel labels the dev-only button that mints a token (see DevSecret).
 const CheatCodeLabel = "Apply Cheat Code"
 
 // maxTokenLength caps the token input. Identity-provider tokens can be long.
@@ -60,53 +60,70 @@ func GenerateToken(ttl time.Duration, payload interface{}, secretJWTKey string) 
 }
 
 // GetTokenInputForm is the login page. On Save it checks the token (locally, then with
-// GET /authping), stores it in appToken, and calls onLogin with the token's email. The
-// cheat code checkbox appears only when DevSecret() is set. Errors show over the form.
+// GET /authping), stores it in appToken, and calls onLogin with the token's email.
+// When DevSecret() is set, an Email field comes first, and the cheat code button mints a
+// token for that email into the Token field. Errors show over the form.
 func GetTokenInputForm(sh *ui.Shell, appToken *string, onLogin func(email string)) *tview.Form {
 	tokenInput := tview.NewInputField().
-		SetLabel("Token value: ").
+		SetLabel("Token: ").
 		SetFieldWidth(80).
+		SetPlaceholder("paste a JWT").
 		SetAcceptanceFunc(tview.InputFieldMaxLength(maxTokenLength))
 
 	showError := sh.Message
+	form := tview.NewForm()
+	secret := DevSecret()
 
-	form := tview.NewForm().AddFormItem(tokenInput)
-
-	if secret := DevSecret(); secret != "" {
-		cheatCode := tview.NewCheckbox().SetLabel(CheatCodeLabel).SetChecked(false)
-		cheatCode.SetChangedFunc(func(checked bool) {
-			if !checked {
+	var emailInput *tview.InputField
+	minted := "" // the token the cheat code put in the Token field, if any
+	if secret != "" {
+		emailInput = tview.NewInputField().
+			SetLabel("Email: ").
+			SetFieldWidth(40).
+			SetPlaceholder("you@example.com, for the cheat code")
+		// A token minted for one email mustn't be saved under another: editing the
+		// email takes it back.
+		emailInput.SetChangedFunc(func(string) {
+			if minted != "" && tokenInput.GetText() == minted {
 				tokenInput.SetText("")
-				return
 			}
-			email := strings.TrimSpace(tokenInput.GetText())
+			minted = ""
+		})
+		form.AddFormItem(ui.TrimPaste(emailInput))
+	}
+
+	form.AddFormItem(ui.TrimPaste(tokenInput))
+	if secret != "" {
+		form.AddButton(CheatCodeLabel, func() {
+			email := strings.TrimSpace(emailInput.GetText())
 			if _, err := mail.ParseAddress(email); err != nil {
-				cheatCode.SetChecked(false)
-				showError("Invalid email address. Enter an email address to apply the cheat code.")
+				showError("Enter an email address in the Email field to apply the cheat code.")
 				return
 			}
 			jwtToken, err := GenerateToken(8*time.Hour, &TokenFields{Id: randomString(20), Email: email}, secret)
 			if err != nil {
-				cheatCode.SetChecked(false)
 				showError(err.Error())
 				return
 			}
 			tokenInput.SetText(jwtToken)
+			minted = jwtToken
+			sh.Status("Token made for " + email + ". Press Save to log in.")
 		})
-		form.AddFormItem(cheatCode)
 	}
-
-	form.
-		AddButton("Save", func() {
-			tok := strings.TrimSpace(tokenInput.GetText())
-			claims, err := Login(tok, api.New(tok), time.Now())
-			if err != nil {
-				showError("Login failed: " + ui.Describe(err, tok))
-				return
-			}
-			*appToken = tok
-			onLogin(claims.Email)
-		}).
+	form.AddButton("Save", func() {
+		tok := strings.TrimSpace(tokenInput.GetText())
+		if tok == "" && secret != "" {
+			showError("Paste a token, or enter your email and press " + CheatCodeLabel + ".")
+			return
+		}
+		claims, err := Login(tok, api.New(tok), time.Now())
+		if err != nil {
+			showError("Login failed: " + ui.Describe(err, tok))
+			return
+		}
+		*appToken = tok
+		onLogin(claims.Email)
+	}).
 		AddButton("Quit", sh.App.Stop)
 	form.SetBorder(true).SetTitle(" Log in with a JWT ").SetTitleAlign(tview.AlignLeft)
 	return form

@@ -8,6 +8,7 @@ import (
 	"delsignrepl/ui"
 	"delsignrepl/ui/uitest"
 	"delsignrepl/wallets"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,7 +57,7 @@ func startApp(t *testing.T) (*ui.Shell, *uitest.Sim) {
 func TestAppStartsOnLoginInsideShell(t *testing.T) {
 	fakeBackend(t)
 	sh, sim := startApp(t)
-	sim.Shows("Log in with a JWT", "Not logged in", "Generate key", "Send ETH", "Quit")
+	sim.Shows("Log in with a JWT", "Not logged in", "Keys", "Send ETH", "Quit")
 	if sh.Current() != ui.LoginPage || sim.App.GetFocus() == sh.Sidebar {
 		t.Fatal("the login page should be open and focused at start")
 	}
@@ -66,7 +67,7 @@ func TestAppStartsOnLoginInsideShell(t *testing.T) {
 		t.Fatalf("Esc from login went to %q", sh.Current())
 	}
 
-	sim.Type("i") // Key status, before logging in
+	sim.Type("k") // Keys, before logging in
 	sim.Shows("Log in first")
 	sim.Key(tcell.KeyEnter)
 	sim.Shows("Next: log in (t).")
@@ -87,9 +88,13 @@ func TestEscFromEveryScreen(t *testing.T) {
 	fakeBackend(t)
 	sh, sim := startApp(t)
 	sim.Key(tcell.KeyEscape) // leave login
-	sim.Do(func() { state.SetContext(1, addr1) })
+	sim.Do(func() {
+		state.Login(testEmail, "tok")
+		state.SetContext(1, addr1)
+	})
 
 	for _, c := range []struct{ key, page, shows string }{
+		{"k", keys.KeysPage, "Replacement"},
 		{"w", wallets.WalletsPage, "n new wallet"},
 		{"s", send.SendPage, "Amount (wei):"},
 		{"?", ui.HelpPage, "Esc               back"},
@@ -155,13 +160,12 @@ func TestHeaderAndHomeShowTheSession(t *testing.T) {
 	}
 	sim.Type(tok)
 	sim.Key(tcell.KeyTab)   // Save
-	sim.Key(tcell.KeyEnter) // log in: key status modal over Home
-	sim.Key(tcell.KeyEnter) // OK
-	if sh.Current() != ui.HomePage {
+	sim.Key(tcell.KeyEnter) // log in: Home, no modal
+	if sh.Current() != ui.HomePage || sim.App.GetFocus() != sh.Sidebar {
 		t.Fatalf("after login, on %q", sh.Current())
 	}
 	sim.Shows(testEmail+"  |  key: none on this machine  |  no wallet context",
-		"Next: generate a signing key (k)")
+		"Next: open Keys (k), generate a signing key (g)", "Logged in as "+testEmail)
 
 	// A key made outside the app: Refresh (R) picks it up and checks it.
 	k, err := keys.Generate()
@@ -172,7 +176,7 @@ func TestHeaderAndHomeShowTheSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	sim.Type("R")
-	sim.Shows("key: not registered", "Next: register your key (r).", "Refreshed at")
+	sim.Shows("key: not registered", "Next: open Keys (k) and register your key (r).", "Refreshed at")
 
 	sim.Type("w")
 	sim.Key(tcell.KeyEnter) // use addr1, the first row: context set, balance fetched
@@ -182,4 +186,100 @@ func TestHeaderAndHomeShowTheSession(t *testing.T) {
 	}
 	sim.Shows("wallet 1 "+state.ShortAddress(addr1)+"  |  0.049 ETH",
 		"Address    "+addr1, "0.049 ETH (49000000000000000 wei)")
+}
+
+// The Keys screen: generate (g), register (r), make a replacement and rotate to it, with
+// the status and files on screen after each step.
+func TestKeysScreen(t *testing.T) {
+	b := fakeBackend(t)
+	sh, sim := startApp(t)
+	sim.Key(tcell.KeyEscape)
+	sim.Do(func() { state.Login(testEmail, "tok") })
+	store := keys.StoreFromEnv()
+	current, _ := store.Path(testEmail, keys.Current)
+	pending, _ := store.Path(testEmail, keys.Pending)
+
+	sim.Type("k")
+	if sh.Current() != keys.KeysPage {
+		t.Fatalf("k opened %q", sh.Current())
+	}
+	sim.Shows("Status       none on this machine", "Key file     none", "Replacement  none",
+		"Next: open Keys (k), generate")
+
+	sim.Type("g")
+	sim.Shows("Signing key saved to", "Now register it (r).")
+	sim.Key(tcell.KeyEnter)
+	sim.Shows("Status       not registered", "Key file     "+current)
+	if sh.Current() != keys.KeysPage {
+		t.Fatalf("OK after generating went to %q", sh.Current())
+	}
+
+	sim.Type("r")
+	sim.Shows("Key registered.")
+	sim.Key(tcell.KeyEnter)
+	sim.Shows("Status       matches", "registered and matches this machine's key")
+	first := b.Registered(testEmail)
+	if first == "" {
+		t.Fatal("nothing registered")
+	}
+
+	sim.Type("g") // a key exists: offer a replacement
+	sim.Shows("You already have a key. Make a", "Replace     Cancel")
+	sim.Key(tcell.KeyEnter) // Replace
+	sim.Shows("Replacement key saved to")
+	sim.Key(tcell.KeyEnter)
+	sim.Shows("matches, replacement waiting", "Replacement  "+pending)
+
+	sim.Type("r") // rotate
+	sim.Shows("Key replaced.")
+	sim.Key(tcell.KeyEnter)
+	sim.Shows("Status       matches (", "Replacement  none")
+	if b.Registered(testEmail) == first {
+		t.Error("rotation didn't change the registered key")
+	}
+
+	sim.Type("R")
+	sim.Shows("Key checked at")
+	sim.Key(tcell.KeyEscape)
+	sim.Shows(testEmail + "  |  key: matches")
+}
+
+// With the dev secret set, the login page has an Email field and the cheat code button,
+// which makes a token for that email. Editing the email takes the token back.
+func TestCheatCodeLogin(t *testing.T) {
+	fakeBackend(t)
+	t.Setenv("DELSIGN_DEV_JWT_SECRET", "s3cret")
+	sh, sim := startApp(t)
+	sim.Shows("Email:", "Token:", token.CheatCodeLabel)
+
+	sim.Key(tcell.KeyTab)   // Email -> Token
+	sim.Key(tcell.KeyTab)   // Token -> Apply Cheat Code
+	sim.Key(tcell.KeyEnter) // no email yet
+	sim.Shows("Enter an email address in the Email")
+	sim.Key(tcell.KeyEnter)
+
+	sim.Key(tcell.KeyBacktab)
+	sim.Key(tcell.KeyBacktab) // back to Email
+	sim.Type(testEmail)
+	sim.Key(tcell.KeyTab)
+	sim.Key(tcell.KeyTab)
+	sim.Key(tcell.KeyEnter)
+	sim.Shows("Token made for "+testEmail, "Token:  eyJhbGci")
+
+	sim.Key(tcell.KeyBacktab)
+	sim.Key(tcell.KeyBacktab)
+	sim.Type("x") // a different email: the token goes
+	if strings.Contains(sim.Text(), "eyJ") {
+		t.Fatal("editing the email kept the token minted for the old one")
+	}
+	sim.Key(tcell.KeyBackspace2)
+	sim.Key(tcell.KeyTab)
+	sim.Key(tcell.KeyTab)
+	sim.Key(tcell.KeyEnter) // make it again
+	sim.Key(tcell.KeyTab)   // Save
+	sim.Key(tcell.KeyEnter)
+	if sh.Current() != ui.HomePage {
+		t.Fatalf("after Save, on %q", sh.Current())
+	}
+	sim.Shows(testEmail + "  |  key: none on this machine")
 }

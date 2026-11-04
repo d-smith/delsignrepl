@@ -135,7 +135,7 @@ func processSendForm(sh *ui.Shell, destText, amountText string) {
 		return
 	}
 	if state.PrivateKey == nil {
-		sh.Modal("No signing key loaded. Generate (k) and register (r) a key first.",
+		sh.Modal("No signing key loaded. Open Keys (k) to generate and register one first.",
 			[]string{"OK"}, func(string) { sh.Home() })
 		return
 	}

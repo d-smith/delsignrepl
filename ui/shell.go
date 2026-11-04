@@ -37,9 +37,6 @@ type Shell struct {
 	Token func() string
 
 	headerFunc func() string // recomputes the header before each draw, if set
-	homeFunc   func() string // recomputes Home's text before each draw, if set
-	homeView   *tview.TextView
-	homeLast   string
 
 	history []string // screens to go Back to, oldest first
 	modals  int      // counter for unique modal page names
@@ -103,23 +100,14 @@ func (s *Shell) SetHeaderFunc(f func() string) {
 	s.headerFunc = f
 }
 
-// SetHomeFunc makes Home a text view showing f's result, recomputed before every draw.
+// SetHomeFunc makes Home a text view showing f's result, recomputed when drawn.
 func (s *Shell) SetHomeFunc(f func() string) {
-	s.homeFunc = f
-	s.homeView = tview.NewTextView()
-	s.SetHome(s.homeView)
+	s.SetHome(NewLiveText(f))
 }
 
 func (s *Shell) refreshText() {
 	if s.headerFunc != nil {
 		s.Header.SetText(tview.Escape(s.headerFunc()))
-	}
-	if s.homeFunc != nil {
-		// Only on a change, so that redraws don't reset Home's scroll position.
-		if text := s.homeFunc(); text != s.homeLast {
-			s.homeLast = text
-			s.homeView.SetText(tview.Escape(text))
-		}
 	}
 }
 
@@ -347,6 +335,9 @@ const helpText = `
                     copy it with your terminal (Ctrl+Shift+C). With it on, hold
                     Shift while dragging.
   q                 quit, from the menu
+
+  On Keys     g generate a key (or a replacement)  r register it  R check again
+  On Wallets  Enter use the address  n new wallet  a new address
 
   Menu shortcuts work while the menu has the focus. Esc gets you back to it.
 
