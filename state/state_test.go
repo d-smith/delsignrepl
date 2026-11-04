@@ -48,7 +48,7 @@ func TestHeaderAndHomeFollowTheSession(t *testing.T) {
 	}
 
 	KeyStatus, KeyNext = "matches", ""
-	if n := NextStep(); !strings.Contains(n, "create a wallet (w)") {
+	if n := NextStep(); !strings.Contains(n, "open Wallets (w)") {
 		t.Errorf("no context: %q", n)
 	}
 

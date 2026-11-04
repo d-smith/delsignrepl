@@ -33,7 +33,7 @@ type Shell struct {
 	Content *tview.Pages
 	Footer  *tview.TextView
 
-	// Token returns the current API token, for the 403 check in Error. Nil means none.
+	// Token returns the current API token. It defaults to none ("").
 	Token func() string
 
 	headerFunc func() string // recomputes the header before each draw, if set
@@ -57,6 +57,7 @@ func NewShell(app *tview.Application) *Shell {
 		Content: tview.NewPages(),
 		Footer:  tview.NewTextView().SetDynamicColors(true),
 		mouse:   true,
+		Token:   func() string { return "" },
 	}
 	s.Header.SetBorder(true).SetTitle(" delsign ").SetTitleAlign(tview.AlignLeft)
 	s.Sidebar.SetBorder(true).SetTitle(" Menu ").SetTitleAlign(tview.AlignLeft)
@@ -206,10 +207,7 @@ func (s *Shell) Message(text string) {
 // Error shows prefix and the described error (see describeErr). If the backend confirms
 // a token problem, OK opens the login page.
 func (s *Shell) Error(prefix string, err error) {
-	token := ""
-	if s.Token != nil {
-		token = s.Token()
-	}
+	token := s.Token()
 	msg, tokenProblem := describeErr(err, func() error { return api.New(token).AuthPing() })
 	s.Modal(prefix+": "+msg, []string{"OK"}, func(string) {
 		if tokenProblem {
@@ -293,7 +291,7 @@ func (s *Shell) focusFront() {
 // typing reports whether the focus is somewhere keys are text: an input field, a text
 // area, or an open dropdown.
 func (s *Shell) typing() bool {
-	switch s.App.GetFocus().(type) {
+	switch unwrap(s.App.GetFocus()).(type) {
 	case *tview.InputField, *tview.TextArea:
 		return true
 	}
@@ -328,7 +326,7 @@ func (s *Shell) globalKeys(ev *tcell.EventKey) *tcell.EventKey {
 // dropdown moves the focus to its own *tview.List. Screens don't use plain lists (only
 // the sidebar is one), so a focused list that isn't the sidebar is an open dropdown.
 func (s *Shell) dropdownOpen() bool {
-	switch p := s.App.GetFocus().(type) {
+	switch p := unwrap(s.App.GetFocus()).(type) {
 	case *tview.DropDown:
 		return p.IsOpen()
 	case *tview.List:

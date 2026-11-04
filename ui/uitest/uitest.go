@@ -142,3 +142,31 @@ func (s *Sim) Shows(want ...string) {
 		}
 	}
 }
+
+// Paste sends text as one bracketed paste (paste start, the keys, paste end), as a
+// terminal does with paste enabled, and waits until cond holds.
+func (s *Sim) Paste(text string, cond func() bool) {
+	s.t.Helper()
+	s.Screen.PostEvent(tcell.NewEventPaste(true))
+	for _, r := range text {
+		k := tcell.KeyRune
+		if r == '\n' {
+			k, r = tcell.KeyEnter, 0
+		}
+		s.Screen.InjectKey(k, r, tcell.ModNone)
+	}
+	s.Screen.PostEvent(tcell.NewEventPaste(false))
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		s.Settle()
+		ok := false
+		s.Do(func() { ok = cond() })
+		if ok {
+			return
+		}
+		if time.Now().After(deadline) {
+			s.t.Fatalf("paste of %q didn't take effect", text)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}

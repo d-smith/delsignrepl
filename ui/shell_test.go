@@ -174,3 +174,43 @@ func TestShellErrorRoutesTokenProblemsToLogin(t *testing.T) {
 		t.Errorf("OK on a non-token error went to %q, want the screen under it", sh.Current())
 	}
 }
+
+// Esc closes an open dropdown first, and only the next Esc leaves the screen.
+func TestShellEscClosesDropdownFirst(t *testing.T) {
+	sh, sim, _ := testShell(t)
+	sim.Do(func() {
+		sh.Show("Form", tview.NewForm().AddDropDown("Pick: ", []string{"apple", "banana"}, 0, nil))
+	})
+	sim.Key(tcell.KeyEnter) // open the dropdown
+	sim.Shows("banana")
+	sim.Key(tcell.KeyEscape)
+	if sh.Current() != "Form" {
+		t.Fatalf("Esc with the dropdown open left the screen, on %q", sh.Current())
+	}
+	sim.Key(tcell.KeyEscape)
+	if sh.Current() != ui.HomePage {
+		t.Errorf("second Esc went to %q", sh.Current())
+	}
+}
+
+// A TrimPaste field trims pastes, and the shell still sees it as a text field, so ? is
+// typed rather than opening help.
+func TestTrimPasteField(t *testing.T) {
+	sh, sim, _ := testShell(t)
+	digits := func(text string, _ rune) bool { return strings.Trim(text, "0123456789") == "" }
+	field := tview.NewInputField().SetLabel("Amount: ").SetAcceptanceFunc(digits)
+	sim.Do(func() { sh.Show("Form", tview.NewForm().AddFormItem(ui.TrimPaste(field))) })
+
+	// A real bracketed paste of a copied line, trailing newline included.
+	sim.Paste(" 1000\n", func() bool { return field.GetText() != "" })
+	if field.GetText() != "1000" || sh.Current() != "Form" {
+		t.Errorf("pasted %q (on %q), want 1000", field.GetText(), sh.Current())
+	}
+
+	other := tview.NewInputField().SetLabel("Note: ")
+	sim.Do(func() { sh.Show("Note", tview.NewForm().AddFormItem(ui.TrimPaste(other))) })
+	sim.Type("why?")
+	if sh.Current() != "Note" || other.GetText() != "why?" {
+		t.Errorf("? in a wrapped field: on %q, text %q", sh.Current(), other.GetText())
+	}
+}

@@ -107,7 +107,15 @@ type fakeSend struct {
 	t      *testing.T
 	pub    *rsa.PublicKey
 	script []int
+	mu     sync.Mutex // bodies is appended on the server's goroutine
 	bodies [][]byte
+}
+
+// posted returns a copy of the bodies received so far.
+func (f *fakeSend) posted() [][]byte {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([][]byte{}, f.bodies...)
 }
 
 func (f *fakeSend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +124,9 @@ func (f *fakeSend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body, _ := io.ReadAll(r.Body)
+	f.mu.Lock()
 	f.bodies = append(f.bodies, body)
+	f.mu.Unlock()
 	var req api.SendRequest
 	d := json.NewDecoder(bytes.NewReader(body))
 	d.DisallowUnknownFields()
@@ -172,8 +182,8 @@ func TestFlowSent(t *testing.T) {
 	if f.CanRetry() {
 		t.Error("a sent request offers a retry")
 	}
-	if _, err := f.Retry(); !errors.Is(err, ErrCantRetry) || len(fake.bodies) != 1 {
-		t.Errorf("Retry after 200: %v, %d posts", err, len(fake.bodies))
+	if _, err := f.Retry(); !errors.Is(err, ErrCantRetry) || len(fake.posted()) != 1 {
+		t.Errorf("Retry after 200: %v, %d posts", err, len(fake.posted()))
 	}
 }
 
@@ -191,8 +201,8 @@ func TestFlowRetrySendsIdenticalBytes(t *testing.T) {
 	if err != nil || r.Outcome != Sent {
 		t.Fatalf("retry: %+v, %v", r, err)
 	}
-	if len(fake.bodies) != 2 || !bytes.Equal(fake.bodies[0], fake.bodies[1]) {
-		t.Errorf("retry didn't resend identical bytes:\n%s\n%s", fake.bodies[0], fake.bodies[1])
+	if len(fake.posted()) != 2 || !bytes.Equal(fake.posted()[0], fake.posted()[1]) {
+		t.Errorf("retry didn't resend identical bytes:\n%s\n%s", fake.posted()[0], fake.posted()[1])
 	}
 }
 
@@ -203,8 +213,8 @@ func TestFlowNoRetryAfterExpiry(t *testing.T) {
 	if f.CanRetry() {
 		t.Error("retry offered at expiry")
 	}
-	if _, err := f.Retry(); !errors.Is(err, ErrExpired) || len(fake.bodies) != 1 {
-		t.Errorf("Retry at expiry: %v, %d posts", err, len(fake.bodies))
+	if _, err := f.Retry(); !errors.Is(err, ErrExpired) || len(fake.posted()) != 1 {
+		t.Errorf("Retry at expiry: %v, %d posts", err, len(fake.posted()))
 	}
 }
 
@@ -221,8 +231,8 @@ func TestFlow409NeverRetriesWithNewID(t *testing.T) {
 	if _, err := f.Retry(); !errors.Is(err, ErrCantRetry) {
 		t.Errorf("Retry after 409: %v", err)
 	}
-	if len(fake.bodies) != 2 || !bytes.Equal(fake.bodies[0], fake.bodies[1]) {
-		t.Errorf("want the same body twice and nothing more, got %d posts", len(fake.bodies))
+	if len(fake.posted()) != 2 || !bytes.Equal(fake.posted()[0], fake.posted()[1]) {
+		t.Errorf("want the same body twice and nothing more, got %d posts", len(fake.posted()))
 	}
 }
 
@@ -233,8 +243,8 @@ func TestFlow502NewIDOnlyAfterConfirm(t *testing.T) {
 		t.Fatalf("got %+v", r)
 	}
 	first := f.Request().RequestID
-	if _, err := f.Retry(); !errors.Is(err, ErrCantRetry) || len(fake.bodies) != 1 {
-		t.Fatalf("Retry after 502: %v, %d posts", err, len(fake.bodies))
+	if _, err := f.Retry(); !errors.Is(err, ErrCantRetry) || len(fake.posted()) != 1 {
+		t.Fatalf("Retry after 502: %v, %d posts", err, len(fake.posted()))
 	}
 	r = f.Confirm(src, dst, big.NewInt(5))
 	if r.Outcome != Sent || f.Request().RequestID == first {

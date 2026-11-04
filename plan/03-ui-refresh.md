@@ -219,6 +219,57 @@ Global keys go in `app.SetInputCapture`:
 
      All are stable over 10 runs and under `-race`.
 3. **Wallets and Send.** The table with picker mode; the Send screen with the ETH preview.
+
+   Result (2026-11-03):
+   - **Wallets screen** (`wallets/wallets.go`, sidebar `w`):
+     - a table of every address with its wallet (`GET /walletctx`), then every wallet
+       with no address yet (`GET /wallets`), with the context marked `*`;
+     - **Enter** makes the row the context and fetches its balance, staying on the table;
+       on a wallet with no address it says to press `a`;
+     - **n** creates a wallet and selects it; **a** creates an address in the selected
+       row's wallet and selects it;
+     - an empty account shows "No wallets yet: press n".
+
+     It replaces the Create wallet, Generate address and Set wallet context items, their
+     pages and both dropdowns (`wallets/address.go` and `wallets/context.go` are gone).
+     The app has no dropdowns left.
+   - **Picker mode** (`wallets.PickAddress`): the same table listing the user's addresses
+     except the source. Enter picks and goes back; Esc goes back without picking.
+   - **Send form:**
+     - From is a read-only line;
+     - To and Amount have placeholders;
+     - a live preview under the amount shows `= 0.001 ETH` as you type, or what's wrong
+       ("no leading zeros", "more than the largest amount", "must be more than 0");
+     - a **Pick from my addresses** button replaces the "Use Wallet Address" checkbox;
+     - the confirmation and outcome flow is unchanged.
+   - **Paste:** `ui.TrimPaste` wraps an input field so pasted text is trimmed. A copied
+     line with a trailing newline used to be refused whole by the digits-only amount
+     check. To and Amount use it. The wrapper has an `Unwrap` method, and the shell looks
+     through it, so `?` is still typed rather than opening help.
+   - **Found on the way:**
+     - a text view in a form is only skipped by Tab when it isn't scrollable, which text
+       views are by default. The From line and the preview set `SetScrollable(false)`;
+     - footer status messages are cut off at the terminal width, so they use short
+       addresses;
+     - `Shell.Token` now defaults to returning `""` instead of nil, which panicked;
+     - running every package under `-race` for the first time found test-only races in
+       two older fakes (`send/flow_test.go` and `keys/register_test.go`). They record
+       requests on the server's goroutine, and when they drop a connection nothing orders
+       that against the test's reads. Both now take a mutex. No app code was affected.
+   - **Tests:**
+     - `ui/uitest/backend.go`: a stateful fake of the wallet endpoints, shared by the
+       `main` and `wallets` tests;
+     - `wallets/wallets_test.go`: the table's rows and order, Enter setting the context and
+       balance (not on an empty wallet), `n` then `a` then Enter, the empty account, and
+       the picker excluding the source, picking and Esc;
+     - `main_test.go`: the live preview, and the picker returning to the form with the
+       destination filled in and the amount kept;
+     - `ui/shell_test.go`: Esc closing an open dropdown (moved from `main_test.go`), and a
+       real bracketed paste via `uitest.Paste`. Without the wrapper the same paste is
+       refused, so the test isn't vacuous. `?` is typed in a wrapped field;
+     - `send/send_test.go`: `amountPreview` cases.
+
+     All are stable over 10 runs, and every package is clean under `-race`.
 4. **Keys and Log in.** The combined Keys screen; separate Email and Token fields.
 5. **Activity and copy.** The activity log, the copy keys and the mouse toggle hint.
 6. **Readme.** Update "Using the app" and the key hints. Note that mouse off means plain selection.

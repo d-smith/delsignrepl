@@ -24,9 +24,7 @@ func buildShell(app *tview.Application) *ui.Shell {
 	sh.AddAction("Generate key", 'k', func() { keys.DoKeyGeneration(sh) }).
 		AddAction("Register key", 'r', func() { keys.DoKeyRegistration(sh) }).
 		AddAction("Key status", 'i', func() { keys.DoKeyStatus(sh) }).
-		AddAction("Create wallet", 'w', func() { wallets.DoWalletGeneration(sh) }).
-		AddAction("Generate address", 'a', func() { wallets.DoAddressGeneration(sh) }).
-		AddAction("Set wallet context", 'c', func() { wallets.DoSetContext(sh) }).
+		AddAction("Wallets", 'w', func() { wallets.ShowWallets(sh) }).
 		AddAction("Get balance", 'b', func() { wallets.DoGetBalance(sh) }).
 		AddAction("Send ETH", 's', func() { send.ShowSendForm(sh) }).
 		AddAction("Refresh", 'R', func() { refresh(sh) }).

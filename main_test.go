@@ -2,14 +2,12 @@ package main
 
 import (
 	"delsignrepl/keys"
+	"delsignrepl/send"
 	"delsignrepl/state"
 	"delsignrepl/token"
 	"delsignrepl/ui"
 	"delsignrepl/ui/uitest"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-	"strings"
+	"delsignrepl/wallets"
 	"testing"
 	"time"
 
@@ -20,38 +18,19 @@ import (
 const testEmail = "a@example.com"
 
 var (
-	addr1 = "0x" + strings.Repeat("1a", 20)
-	addr2 = "0x" + strings.Repeat("2b", 20)
+	addr1 = uitest.Address(1)
+	addr2 = uitest.Address(2)
 )
 
-// fakeBackend answers the wallet calls the screens make, from openapi.yaml's shapes.
-func fakeBackend(t *testing.T) {
+// fakeBackend: wallet 1 holds addr1 (0.049 ETH), wallet 2 holds addr2.
+func fakeBackend(t *testing.T) *uitest.Backend {
 	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method + " " + r.URL.Path {
-		case "GET /api/v1/wallets":
-			json.NewEncoder(w).Encode([]int{1, 2})
-		case "POST /api/v1/wallets":
-			w.WriteHeader(201)
-			json.NewEncoder(w).Encode(map[string]int{"id": 3})
-		case "GET /api/v1/authping":
-		case "GET /api/v1/users/" + testEmail:
-			http.Error(w, "No key registered", 404)
-		case "GET /api/v1/wallets/balance/" + addr1:
-			json.NewEncoder(w).Encode(map[string]string{"address": addr1, "amount": "49000000000000000"})
-		case "GET /api/v1/walletctx":
-			json.NewEncoder(w).Encode([]map[string]any{
-				{"walletId": 1, "address": addr1}, {"walletId": 2, "address": addr2}})
-		default:
-			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
-			http.Error(w, "not found", 404)
-		}
-	}))
-	t.Cleanup(srv.Close)
-	t.Setenv("DELSIGN_API_URL", srv.URL)
+	b := uitest.StartBackend(t, map[int][]string{1: {addr1}, 2: {addr2}}, 1, 2)
+	b.Balances[addr1] = "49000000000000000"
 	t.Setenv("DELSIGN_DEV_JWT_SECRET", "")
 	t.Setenv("DELSIGN_KEY_DIR", t.TempDir())
 	resetSession(t)
+	return b
 }
 
 // resetSession clears the session globals before and after a test.
@@ -95,11 +74,11 @@ func TestAppStartsOnLoginInsideShell(t *testing.T) {
 		t.Error("OK on the modal should return to Home and the sidebar")
 	}
 
-	sim.Type("w") // Create wallet: a modal now, not a page waiting for 'm'
-	sim.Shows("Created wallet 3")
+	sim.Type("s") // Send with no address chosen: a modal over Home
+	sim.Shows("No address chosen yet")
 	sim.Key(tcell.KeyEscape)
 	if sh.Current() != ui.HomePage || sim.App.GetFocus() != sh.Sidebar {
-		t.Errorf("Esc on the wallet modal: on %q", sh.Current())
+		t.Errorf("Esc on the modal: on %q", sh.Current())
 	}
 }
 
@@ -111,9 +90,8 @@ func TestEscFromEveryScreen(t *testing.T) {
 	sim.Do(func() { state.SetContext(1, addr1) })
 
 	for _, c := range []struct{ key, page, shows string }{
-		{"a", "Address Gen", "Wallet ID:"},
-		{"c", "SetCtx", "Wallet | address:"},
-		{"s", "SendEth", "Destination address:"},
+		{"w", wallets.WalletsPage, "n new wallet"},
+		{"s", send.SendPage, "Amount (wei):"},
 		{"?", ui.HelpPage, "Esc               back"},
 		{"t", ui.LoginPage, "Log in with a JWT"},
 	} {
@@ -129,45 +107,34 @@ func TestEscFromEveryScreen(t *testing.T) {
 	}
 }
 
-// Esc closes an open dropdown first, and only the next Esc leaves the screen.
-func TestEscClosesDropdownFirst(t *testing.T) {
-	fakeBackend(t)
-	sh, sim := startApp(t)
-	sim.Key(tcell.KeyEscape)
-	sim.Type("c")
-	sim.Key(tcell.KeyEnter) // open the wallet/address dropdown
-	sim.Shows(addr2)
-	sim.Key(tcell.KeyEscape)
-	if sh.Current() != "SetCtx" {
-		t.Fatalf("Esc with the dropdown open left the screen, on %q", sh.Current())
-	}
-	sim.Key(tcell.KeyEscape)
-	if sh.Current() != ui.HomePage {
-		t.Errorf("second Esc went to %q", sh.Current())
-	}
-}
-
-// The send form's picker returns to the form with the address filled in, and Cancel on
-// the form goes back Home.
-func TestSendPickerReturnsToForm(t *testing.T) {
+// The send form: the ETH preview follows the amount as it's typed, and "Pick from my
+// addresses" returns to the form with the destination filled in and the amount kept.
+func TestSendFormPreviewAndPicker(t *testing.T) {
 	fakeBackend(t)
 	sh, sim := startApp(t)
 	sim.Key(tcell.KeyEscape)
 	sim.Do(func() { state.SetContext(1, addr1) })
 
 	sim.Type("s")
-	sim.Key(tcell.KeyTab) // destination -> "Use Wallet Address"
-	sim.Type(" ")         // tick it: opens the picker
-	if sh.Current() != "WalletAddress" {
+	sim.Shows("From:", addr1, "To:", "Amount (wei):")
+	sim.Key(tcell.KeyTab) // To -> Amount
+	sim.Type("1000000000000000")
+	sim.Shows("= 0.001 ETH")
+	sim.Type("0")
+	sim.Shows("= 0.01 ETH")
+
+	sim.Key(tcell.KeyTab) // Amount -> Send (the preview is skipped)
+	sim.Key(tcell.KeyTab) // Send -> Pick from my addresses
+	sim.Key(tcell.KeyEnter)
+	if sh.Current() != wallets.PickPage {
 		t.Fatalf("picker didn't open, on %q", sh.Current())
 	}
 	sim.Shows("Send to one of my addresses", addr2)
-	sim.Key(tcell.KeyTab) // dropdown -> "Use this"
-	sim.Key(tcell.KeyEnter)
-	if sh.Current() != "SendEth" {
-		t.Fatalf("Use this went to %q, want the send form", sh.Current())
+	sim.Key(tcell.KeyEnter) // addr2, the only other address
+	if sh.Current() != send.SendPage {
+		t.Fatalf("picking went to %q, want the send form", sh.Current())
 	}
-	sim.Shows(addr2)
+	sim.Shows(addr2, "10000000000000000", "= 0.01 ETH")
 
 	sim.Key(tcell.KeyEscape)
 	if sh.Current() != ui.HomePage {
@@ -207,12 +174,12 @@ func TestHeaderAndHomeShowTheSession(t *testing.T) {
 	sim.Type("R")
 	sim.Shows("key: not registered", "Next: register your key (r).", "Refreshed at")
 
-	sim.Type("c")
-	sim.Key(tcell.KeyTab)   // Use this
-	sim.Key(tcell.KeyEnter) // context set, balance fetched, back Home
+	sim.Type("w")
+	sim.Key(tcell.KeyEnter) // use addr1, the first row: context set, balance fetched
+	sim.Key(tcell.KeyEscape)
 	if sh.Current() != ui.HomePage {
 		t.Fatalf("after setting the context, on %q", sh.Current())
 	}
-	sim.Shows("wallet 1 0x1a1a...1a1a  |  0.049 ETH",
+	sim.Shows("wallet 1 "+state.ShortAddress(addr1)+"  |  0.049 ETH",
 		"Address    "+addr1, "0.049 ETH (49000000000000000 wei)")
 }

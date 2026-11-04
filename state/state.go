@@ -128,7 +128,7 @@ func NextStep() string {
 	case KeyNext != "":
 		return KeyNext
 	case Address == "":
-		return "create a wallet (w) and an address (a), then choose them with Set wallet context (c)."
+		return "open Wallets (w): create a wallet (n) and an address (a), then press Enter on it."
 	case Balance != nil && Balance.Sign() == 0:
 		return "fund " + ShortAddress(Address) + " from an Anvil account with cast send (see the readme), then Refresh (R)."
 	}

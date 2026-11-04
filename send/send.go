@@ -14,15 +14,8 @@ import (
 	"github.com/rivo/tview"
 )
 
-func filterWalletAddressPairs(pairs []wallets.WalletAddressPair, address string) []wallets.WalletAddressPair {
-	var filtered []wallets.WalletAddressPair
-	for _, pair := range pairs {
-		if pair.Address != address {
-			filtered = append(filtered, pair)
-		}
-	}
-	return filtered
-}
+// SendPage is the send form's page name.
+const SendPage = "SendEth"
 
 // ShowSendForm shows an empty send form for the current wallet context.
 func ShowSendForm(sh *ui.Shell) {
@@ -32,80 +25,61 @@ func ShowSendForm(sh *ui.Shell) {
 // showSendForm shows the send form with dest and amount filled in ("Edit and send again").
 func showSendForm(sh *ui.Shell, destText, amountText string) {
 	if state.Address == "" {
-		sh.Message("Wallet and address context not set. Choose one with Set wallet context (c).")
+		sh.Message("No address chosen yet. In Wallets (w), press Enter on the address to send from.")
 		return
 	}
 
+	// Text views in a form are skipped by Tab only if they aren't scrollable.
+	source := tview.NewTextView().SetLabel("From: ").SetText(state.Address).SetSize(1, 0).SetScrollable(false)
 	destination := tview.NewInputField().
-		SetLabel("Destination address: ").
-		SetFieldWidth(60).
+		SetLabel("To: ").
+		SetFieldWidth(44).
+		SetPlaceholder("0x followed by 40 hex digits").
 		SetText(destText).
 		SetAcceptanceFunc(tview.InputFieldMaxLength(60))
-
-	var address string
-	var selection int
-
-	walletAddress := tview.NewCheckbox().SetLabel("Use Wallet Address").SetChecked(false)
-	walletAddress.SetChangedFunc(func(checked bool) {
-		if checked {
-			walletAddressPairs, err := wallets.GetWalletsAndAddresses(sh.Token())
-			if err != nil {
-				sh.Error("Error retrieving wallet and address context", err)
-				return
-			}
-
-			walletAddressPairs = filterWalletAddressPairs(walletAddressPairs, state.Address)
-			if len(walletAddressPairs) == 0 {
-				sh.Message("You have no other addresses to send to.")
-				return
-			}
-
-			form := tview.NewForm().
-				AddDropDown("Wallet | address: ", wallets.PairsToStrings(walletAddressPairs), 0,
-					func(_ string, idx int) {
-						selection = idx
-					}).
-				AddButton("Use this", func() {
-					address = walletAddressPairs[selection].Address
-					destination.SetText(address)
-					sh.Back()
-				}).
-				AddButton("Cancel", sh.Back)
-			form.SetBorder(true).SetTitle(" Send to one of my addresses ").SetTitleAlign(tview.AlignLeft)
-			sh.Show("WalletAddress", form)
-
-		} else {
-			destination.SetText("")
-		}
-	})
-
 	amount := tview.NewInputField().
-		SetLabel("Amount (in wei): ").
+		SetLabel("Amount (wei): ").
 		SetFieldWidth(80).
+		SetPlaceholder("1000000000000000 is 0.001 ETH").
 		SetText(amountText).
 		SetAcceptanceFunc(weiDigitsOnly)
-
-	source := tview.NewInputField().
-		SetLabel("Source address: ").
-		SetFieldWidth(60).
-		SetText(state.Address).
-		SetAcceptanceFunc(func(s string, lc rune) bool {
-			return false
-		})
+	preview := tview.NewTextView().SetLabel(" ").SetSize(1, 0).SetScrollable(false).
+		SetText(amountPreview(amountText))
+	amount.SetChangedFunc(func(text string) { preview.SetText(amountPreview(text)) })
 
 	form := tview.NewForm().
-		//AddTextView("Source Address", state.Address, 0, 0, false, false).
 		AddFormItem(source).
-		AddFormItem(destination).
-		AddFormItem(walletAddress).
-		AddFormItem(amount).
+		AddFormItem(ui.TrimPaste(destination)).
+		AddFormItem(ui.TrimPaste(amount)).
+		AddFormItem(preview).
 		AddButton("Send", func() {
 			processSendForm(sh, destination.GetText(), amount.GetText())
+		}).
+		AddButton("Pick from my addresses", func() {
+			wallets.PickAddress(sh, state.Address, func(a string) { destination.SetText(a) })
 		}).
 		AddButton("Cancel", sh.Back)
 	form.SetFocus(1)
 	form.SetBorder(true).SetTitle(" Send ETH ").SetTitleAlign(tview.AlignLeft)
-	sh.Show("SendEth", form)
+	sh.Show(SendPage, form)
+}
+
+// amountPreview is the line under the amount: its value in ETH as it's typed, or what's
+// wrong with it.
+func amountPreview(text string) string {
+	if text == "" {
+		return ""
+	}
+	wei, err := api.ParseWei(text)
+	switch {
+	case err != nil && len(text) > 1 && text[0] == '0':
+		return "no leading zeros, please"
+	case err != nil:
+		return "more than the largest amount (2^256-1 wei)"
+	case wei.Sign() == 0:
+		return "= 0 ETH (the amount must be more than 0)"
+	}
+	return "= " + api.FormatEther(wei) + " ETH"
 }
 
 // weiDigitsOnly lets the amount field hold decimal digits only, up to the wire format's
