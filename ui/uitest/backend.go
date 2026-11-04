@@ -14,7 +14,7 @@ import (
 
 // Backend is a stateful fake of the delsign wallet endpoints, written from
 // openapi.yaml's paths and shapes: wallets, addresses, wallet context, balances,
-// /authping, and key registration (POST /keyreg, GET /users). It records keys without
+// /authping, key registration (POST /keyreg, GET /users) and sends (POST /wallets/send). It records keys without
 // checking signatures; keys/register_test.go covers those.
 type Backend struct {
 	t        *testing.T
@@ -23,6 +23,7 @@ type Backend struct {
 	addrs    map[int][]string // wallet -> addresses, in creation order
 	Balances map[string]string
 	keys     map[string]string // email -> registered pubkey hex
+	sends    int
 	next     int
 }
 
@@ -89,6 +90,14 @@ func (b *Backend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		b.addrs[id] = append(b.addrs[id], a)
 		w.WriteHeader(201)
 		json.NewEncoder(w).Encode(map[string]string{"eoa": a})
+	case r.Method == "POST" && path == "/wallets/send":
+		var req struct{ Source, Dest, Amount, RequestId, Sig string }
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.RequestId == "" || req.Sig == "" {
+			http.Error(w, "bad body", 400)
+			return
+		}
+		b.sends++
+		json.NewEncoder(w).Encode(map[string]string{"txnid": Txnid(b.sends)})
 	case r.Method == "GET" && path == "/walletctx":
 		pairs := []map[string]any{}
 		for _, id := range b.wallets {
@@ -131,4 +140,9 @@ func (b *Backend) Registered(email string) string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.keys[email]
+}
+
+// Txnid is the transaction id the fake gives the nth send.
+func Txnid(n int) string {
+	return fmt.Sprintf("0x%064x", 0xfeed00+n)
 }

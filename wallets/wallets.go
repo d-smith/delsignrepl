@@ -105,7 +105,7 @@ func (t *table) current() (Row, bool) {
 	return t.rows[row-1], true
 }
 
-const walletsHelp = "Enter use for balance and send   n new wallet   a new address in this wallet   Esc back"
+const walletsHelp = "Enter use for balance and send   n new wallet   a new address in this wallet   c copy   Esc back"
 
 // ShowWallets opens the Wallets screen: all wallets and addresses, with keys to create
 // them and to choose the context (marked *).
@@ -156,6 +156,8 @@ func ShowWallets(sh *ui.Shell) {
 				sh.Error("Error creating wallet", err)
 				return nil
 			}
+			sh.Log(ui.Entry{What: "Created wallet", Summary: fmt.Sprintf("wallet %d", id),
+				Details: []string{fmt.Sprintf("Wallet %d", id)}, Copy: fmt.Sprint(id), CopyIs: "wallet id"})
 			if reload(func(r Row) bool { return r.Wallet == id }) {
 				sh.Status(fmt.Sprintf("Created wallet %d. Press a to add an address to it.", id))
 			}
@@ -171,9 +173,19 @@ func ShowWallets(sh *ui.Shell) {
 				sh.Error("Error creating address", err)
 				return nil
 			}
+			sh.Log(ui.Entry{What: "Created address", Summary: fmt.Sprintf("%s in wallet %d", addr, r.Wallet),
+				Details: []string{"Address " + addr, fmt.Sprintf("Wallet  %d", r.Wallet)},
+				Copy:    addr, CopyIs: "address " + state.ShortAddress(addr)})
 			if reload(func(x Row) bool { return x.Address == addr }) {
 				sh.Status(fmt.Sprintf("Created address %s in wallet %d. Press Enter to use it.",
 					state.ShortAddress(addr), r.Wallet))
+			}
+			return nil
+		case 'c':
+			if r, ok := t.current(); ok && r.Address != "" {
+				sh.Copy(r.Address, "address "+state.ShortAddress(r.Address))
+			} else {
+				sh.Status("This wallet has no address to copy yet.")
 			}
 			return nil
 		}

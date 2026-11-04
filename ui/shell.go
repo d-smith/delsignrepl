@@ -42,6 +42,9 @@ type Shell struct {
 	modals  int      // counter for unique modal page names
 	mouse   bool
 	status  string
+
+	screen   tcell.Screen // the app's screen, once drawn, for the clipboard
+	activity []Entry      // the session's activity, oldest first
 }
 
 // NewShell builds the layout. Add actions with AddAction, Home with SetHome, and other
@@ -72,7 +75,8 @@ func NewShell(app *tview.Application) *Shell {
 	s.Content.SetChangedFunc(s.focusFront)
 	s.Content.AddPage(HelpPage, helpView(), true, false)
 	app.SetInputCapture(s.globalKeys)
-	app.SetBeforeDrawFunc(func(tcell.Screen) bool {
+	app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		s.screen = screen
 		s.refreshText()
 		return false
 	})
@@ -217,7 +221,7 @@ func (s *Shell) SetHeader(text string) {
 	s.Header.SetText(text)
 }
 
-// Status shows msg in the footer after the key hints, until the next Status.
+// Status shows msg in the footer before the key hints, until the next Status.
 func (s *Shell) Status(msg string) {
 	s.status = msg
 	s.drawFooter()
@@ -231,7 +235,11 @@ func (s *Shell) Mouse() bool { return s.mouse }
 func (s *Shell) SetMouse(on bool) {
 	s.mouse = on
 	s.App.EnableMouse(on)
-	s.drawFooter()
+	if on {
+		s.Status("Mouse on: click to select. Shift+drag selects text.")
+	} else {
+		s.Status("Mouse off: drag to select, copy with your terminal.")
+	}
 }
 
 // Hints returns the footer's key hints.
@@ -244,9 +252,10 @@ func (s *Shell) Hints() string {
 }
 
 func (s *Shell) drawFooter() {
+	// The status comes first: if the line is too long, the fixed hints are what's cut.
 	text := "[::d]" + s.Hints() + "[::-]"
 	if s.status != "" {
-		text += "  |  " + tview.Escape(s.status)
+		text = tview.Escape(s.status) + "  |  " + text
 	}
 	s.Footer.SetText(text)
 }
@@ -336,8 +345,11 @@ const helpText = `
                     Shift while dragging.
   q                 quit, from the menu
 
-  On Keys     g generate a key (or a replacement)  r register it  R check again
-  On Wallets  Enter use the address  n new wallet  a new address
+  c                 copy the selected address or txnid (Wallets, Activity)
+
+  On Keys      g generate a key (or a replacement)  r register it  R check again
+  On Wallets   Enter use the address  n new wallet  a new address  c copy it
+  On Activity  Enter details  c copy its txnid, address or wallet id
 
   Menu shortcuts work while the menu has the focus. Esc gets you back to it.
 

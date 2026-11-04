@@ -238,6 +238,14 @@ func TestKeysScreen(t *testing.T) {
 		t.Error("rotation didn't change the registered key")
 	}
 
+	var whats []string
+	for _, e := range sh.Activity() {
+		whats = append(whats, e.What)
+	}
+	if got := strings.Join(whats, ", "); got != "Generated key, Registered key, Generated replacement, Replaced key" {
+		t.Errorf("activity: %s", got)
+	}
+
 	sim.Type("R")
 	sim.Shows("Key checked at")
 	sim.Key(tcell.KeyEscape)
@@ -282,4 +290,56 @@ func TestCheatCodeLogin(t *testing.T) {
 		t.Fatalf("after Save, on %q", sh.Current())
 	}
 	sim.Shows(testEmail + "  |  key: none on this machine")
+}
+
+// A send through the form is logged in Activity with its txnid, which c copies.
+func TestSendIsLoggedInActivity(t *testing.T) {
+	fakeBackend(t)
+	var copied []string
+	prev := ui.SystemCopy
+	ui.SystemCopy = func(text string) (string, error) { copied = append(copied, text); return "", nil }
+	t.Cleanup(func() { ui.SystemCopy = prev })
+
+	sh, sim := startApp(t)
+	sim.Key(tcell.KeyEscape)
+	k, err := keys.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sim.Do(func() {
+		state.Login(testEmail, "tok")
+		state.PrivateKey = k
+		state.SetContext(1, addr1)
+	})
+
+	sim.Type("s")
+	sim.Type(addr2)
+	sim.Key(tcell.KeyTab)
+	sim.Type("1000000000000000")
+	sim.Key(tcell.KeyTab)   // Send
+	sim.Key(tcell.KeyEnter) // confirmation
+	sim.Shows("Send 1000000000000000 wei (0.001 ETH)")
+	sim.Key(tcell.KeyEnter) // Confirm
+	sim.Shows("Broadcast. Transaction", "Copy txnid")
+	sim.Key(tcell.KeyTab)   // OK -> Copy txnid
+	sim.Key(tcell.KeyEnter) // copies, then Home
+	if sh.Current() != ui.HomePage || len(copied) != 1 || copied[0] != uitest.Txnid(1) {
+		t.Fatalf("Copy txnid: on %q, copied %q", sh.Current(), copied)
+	}
+	sim.Shows("Copied txnid through the terminal.")
+
+	sim.Type("a")
+	if sh.Current() != ui.ActivityPage {
+		t.Fatalf("a opened %q", sh.Current())
+	}
+	sim.Shows("Send: sent", "0.001 ETH to "+state.ShortAddress(addr2)+"  tx "+uitest.Txnid(1)[:20])
+	sim.Type("c")
+	if len(copied) != 2 || copied[1] != uitest.Txnid(1) {
+		t.Errorf("copied %q, want the txnid again", copied)
+	}
+	if string(sim.Screen.GetClipboardData()) != uitest.Txnid(1) {
+		t.Errorf("terminal clipboard %q", sim.Screen.GetClipboardData())
+	}
+	sim.Key(tcell.KeyEnter) // details, one value per line
+	sim.Shows("From       "+addr1, "To         "+addr2, "(1000000000000000 wei)", "Request id ", "Txnid      "+uitest.Txnid(1))
 }

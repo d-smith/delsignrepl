@@ -162,6 +162,7 @@ func DoKeyGeneration(sh *ui.Shell) {
 		state.PrivateKey = k
 		refreshQuietly(sh)
 		path, _ := s.Path(state.Email, Current)
+		logKey(sh, "Generated key", path)
 		sh.Message(fmt.Sprintf("Signing key saved to %s.\n\n%s\n\nNow register it (r).", path, lostKeyWarning))
 		return
 	}
@@ -192,6 +193,7 @@ func DoKeyGeneration(sh *ui.Shell) {
 			}
 			refreshQuietly(sh)
 			path, _ := s.Path(state.Email, Pending)
+			logKey(sh, "Generated replacement", path)
 			sh.Message(fmt.Sprintf("Replacement key saved to %s.\n\n%s\n\nRegister it (r) to switch to it.", path, lostKeyWarning))
 		})
 }
@@ -217,7 +219,18 @@ func DoKeyRegistration(sh *ui.Shell) {
 		return
 	}
 	refreshQuietly(sh)
+	if out != AlreadyRegistered {
+		path, _ := s.Path(state.Email, Current)
+		logKey(sh, map[Outcome]string{Registered: "Registered key", Rotated: "Replaced key",
+			Promoted: "Finished key replacement"}[out], path)
+	}
 	sh.Message(out.String())
+}
+
+// logKey records a key change in the activity, with the key file's path to copy.
+func logKey(sh *ui.Shell, what, path string) {
+	sh.Log(ui.Entry{What: what, Summary: state.Email + "  " + path,
+		Details: []string{"Email " + state.Email, "File  " + path}, Copy: path, CopyIs: "key file path"})
 }
 
 // Label is the status's short form, for the header.

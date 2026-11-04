@@ -306,6 +306,36 @@ Global keys go in `app.SetInputCapture`:
    - **For Phase 6:** the readme still describes the checkbox and the Generate key (`k`)
      / Register key (`r`) / Key status (`i`) items.
 5. **Activity and copy.** The activity log, the copy keys and the mouse toggle hint.
+
+   Result (2026-11-04):
+   - **Copy** (`ui/clipboard.go`, `Shell.Copy`): writes through the terminal with tcell's
+     `SetClipboard` (OSC 52; the screen is captured in the before-draw hook) *and* runs
+     the first clipboard command on the PATH (`clip.exe`, `pbcopy`, `wl-copy`, `xclip`,
+     `xsel`), since neither can tell whether the other worked. `clip.exe` is on the PATH
+     here. The footer says what was copied and how, or why the command failed.
+     `ui.SystemCopy` is a variable so tests never touch the real clipboard.
+   - **Activity** (`ui/activity.go`, sidebar `a`): an in-memory log on the shell
+     (`Shell.Log`, `Entry`), shown newest first in a table: time, what, one-line summary.
+     **Enter** opens the entry on its own screen, one value per line, unwrapped (a dialog
+     wrapped 66-character txnids); **c** copies its value there or in the table.
+     Logged: wallet and address creation (copy the id or address), key generated,
+     replacement generated, registered, replaced, finished replacement (copy the file
+     path), and every send attempt and retry: from, to, amount in ETH and wei, request
+     id, outcome, txnid, error (copy the txnid, or the request id if none).
+   - **Wallets:** **c** copies the selected address.
+   - **Send:** the "Broadcast" dialog has a **Copy txnid** button and says Activity keeps
+     the txnid.
+   - **Mouse hint:** F2 says in the footer what the new mode means ("Mouse off: drag to
+     select, copy with your terminal."). The footer now puts the status before the key
+     hints, so a long message cuts the fixed hints rather than itself.
+   - Help lists `c` and the per-screen keys.
+   - **Tests:** the fake backend answers `POST /wallets/send`. `ui/activity_test.go`: Copy
+     through the terminal (the simulation screen records OSC 52) and the command, with
+     the none-found and failure messages; Activity order, Enter, c, Esc. `main_test.go`:
+     a send through the form, Copy txnid, then its Activity entry and details; the
+     key steps logged in order. `wallets_test.go`: c on an address and on an empty
+     wallet; creation logged. All are stable over 10 runs, and every package is clean
+     under `-race`.
 6. **Readme.** Update "Using the app" and the key hints. Note that mouse off means plain selection.
 
 ## Critical files

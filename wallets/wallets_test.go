@@ -89,6 +89,37 @@ func TestWalletsCreateWalletThenAddress(t *testing.T) {
 	if state.Address != got[0] {
 		t.Errorf("context %s, want the new address %s", state.Address, got[0])
 	}
+
+	// Both are in the activity, the address with itself to copy.
+	log := sh.Activity()
+	if len(log) != 2 || log[0].What != "Created wallet" || log[0].Copy != "101" ||
+		log[1].What != "Created address" || log[1].Copy != got[0] {
+		t.Errorf("activity: %+v", log)
+	}
+}
+
+// c copies the selected row's address; a wallet with no address has nothing to copy.
+func TestWalletsCopyAddress(t *testing.T) {
+	_, sh, sim := setup(t)
+	var copied []string
+	prev := ui.SystemCopy
+	ui.SystemCopy = func(text string) (string, error) { copied = append(copied, text); return "", nil }
+	t.Cleanup(func() { ui.SystemCopy = prev })
+
+	sim.Do(func() { wallets.ShowWallets(sh) })
+	sim.Key(tcell.KeyDown) // a2
+	sim.Type("c")
+	if len(copied) != 1 || copied[0] != a2 || string(sim.Screen.GetClipboardData()) != a2 {
+		t.Errorf("copied %q (terminal %q), want %s", copied, sim.Screen.GetClipboardData(), a2)
+	}
+	sim.Shows("Copied address " + state.ShortAddress(a2))
+	sim.Key(tcell.KeyDown)
+	sim.Key(tcell.KeyDown) // wallet 5
+	sim.Type("c")
+	if len(copied) != 1 {
+		t.Errorf("copied from a wallet with no address: %q", copied)
+	}
+	sim.Shows("This wallet has no address to copy yet.")
 }
 
 func TestWalletsEmpty(t *testing.T) {

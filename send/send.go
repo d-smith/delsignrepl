@@ -125,6 +125,7 @@ const (
 	btnRetry   = "Retry same request"
 	btnBalance = "Check balance"
 	btnEdit    = "Edit and send again"
+	btnCopyTx  = "Copy txnid"
 )
 
 func processSendForm(sh *ui.Shell, destText, amountText string) {
@@ -148,7 +149,9 @@ func processSendForm(sh *ui.Shell, destText, amountText string) {
 			return // back to the form
 		}
 		flow := NewFlow(api.New(sh.Token()), state.PrivateKey)
-		showResult(sh, flow, flow.Confirm(source, dest, wei), dest, amountText)
+		r := flow.Confirm(source, dest, wei)
+		logAttempt(sh, flow, r, source, dest, wei, false)
+		showResult(sh, flow, r, dest, amountText)
 	})
 }
 
@@ -167,8 +170,14 @@ func showResult(sh *ui.Shell, flow *Flow, r Result, dest, amountText string) {
 		// leaves it saying "?".
 		_ = wallets.RefreshBalance(sh.Token())
 		sh.Modal(
-			fmt.Sprintf("Broadcast. Transaction %s.\n\nThe balance changes once it's mined.", r.Txnid),
-			[]string{"OK"}, func(string) { toMenu() })
+			fmt.Sprintf("Broadcast. Transaction %s.\n\nThe balance changes once it's mined. "+
+				"Activity (a) keeps the txnid.", r.Txnid),
+			[]string{"OK", btnCopyTx}, func(label string) {
+				toMenu()
+				if label == btnCopyTx {
+					sh.Copy(r.Txnid, "txnid")
+				}
+			})
 
 	case NoResponse:
 		text := fmt.Sprintf("No response: %v\n\nThe transfer may or may not have happened.", r.Err)
@@ -187,6 +196,9 @@ func showResult(sh *ui.Shell, flow *Flow, r Result, dest, amountText string) {
 					showResult(sh, flow, Result{Outcome: NoResponse, Err: r.Err}, dest, amountText)
 					return
 				}
+				req := flow.Request()
+				wei, _ := api.ParseWei(req.Amount)
+				logAttempt(sh, flow, next, req.Source, req.Dest, wei, true)
 				showResult(sh, flow, next, dest, amountText)
 			case btnBalance:
 				checkBalance()
@@ -244,6 +256,62 @@ func showResult(sh *ui.Shell, flow *Flow, r Result, dest, amountText string) {
 	default:
 		sh.Error("Error sending ETH", r.Err) // OK returns to the form
 	}
+}
+
+// outcomeLabel is an outcome's name in the activity log.
+func outcomeLabel(o Outcome) string {
+	switch o {
+	case Sent:
+		return "sent"
+	case NoResponse:
+		return "no response"
+	case AlreadyProcessed:
+		return "already processed"
+	case NodeError:
+		return "node error"
+	case SignatureRejected:
+		return "signature rejected"
+	case Rejected:
+		return "rejected"
+	}
+	return "failed"
+}
+
+// logAttempt records one send attempt in the activity: what was sent where, its request
+// id, outcome and txnid. c copies the txnid, or the request id if there's none.
+func logAttempt(sh *ui.Shell, flow *Flow, r Result, source, dest string, wei *big.Int, retry bool) {
+	what := "Send: " + outcomeLabel(r.Outcome)
+	if retry {
+		what = "Retry: " + outcomeLabel(r.Outcome)
+	}
+	eth := "?"
+	if wei != nil {
+		eth = api.FormatEther(wei) + " ETH"
+	}
+	summary := eth + " to " + state.ShortAddress(dest)
+	details := []string{
+		"From       " + source,
+		"To         " + dest,
+		"Amount     " + eth,
+	}
+	if wei != nil {
+		details[2] += " (" + wei.String() + " wei)"
+	}
+	e := ui.Entry{What: what}
+	if id := flow.Request().RequestID; id != "" {
+		details = append(details, "Request id "+id)
+		e.Copy, e.CopyIs = id, "request id"
+	}
+	if r.Txnid != "" {
+		details = append(details, "Txnid      "+r.Txnid)
+		summary += "  tx " + r.Txnid
+		e.Copy, e.CopyIs = r.Txnid, "txnid"
+	}
+	if r.Err != nil {
+		details = append(details, "Error      "+errText(r.Err))
+	}
+	e.Summary, e.Details = summary, details
+	sh.Log(e)
 }
 
 // errText is the server's text for an api.Error, or the error itself.

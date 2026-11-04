@@ -25,6 +25,7 @@ func buildShell(app *tview.Application) *ui.Shell {
 		AddAction("Wallets", 'w', func() { wallets.ShowWallets(sh) }).
 		AddAction("Get balance", 'b', func() { wallets.DoGetBalance(sh) }).
 		AddAction("Send ETH", 's', func() { send.ShowSendForm(sh) }).
+		AddAction("Activity", 'a', sh.ShowActivity).
 		AddAction("Refresh", 'R', func() { refresh(sh) }).
 		AddAction("Help", '?', func() { sh.Show(ui.HelpPage, nil) }).
 		AddAction("Log in again", 't', func() { sh.Show(ui.LoginPage, nil) }).

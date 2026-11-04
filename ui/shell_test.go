@@ -144,11 +144,15 @@ func TestShellHelpAndMouseKeys(t *testing.T) {
 	if sh.Mouse() {
 		t.Error("F2 didn't turn the mouse off")
 	}
-	sim.Shows("F2 mouse:off")
+	sim.Shows("Mouse off: drag to select, copy with your terminal.")
+	if !strings.Contains(sh.Hints(), "F2 mouse:off") {
+		t.Errorf("hints: %q", sh.Hints())
+	}
 	sim.Key(tcell.KeyF2)
 	if !sh.Mouse() {
 		t.Error("F2 didn't turn the mouse back on")
 	}
+	sim.Shows("Mouse on: click to select. Shift+drag selects text.")
 }
 
 func TestShellErrorRoutesTokenProblemsToLogin(t *testing.T) {
