@@ -18,12 +18,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 )
 
 const email = "a@example.com"
 
 type fakeBackend struct {
+	mu           sync.Mutex // the handler runs on the server's goroutines
 	t            *testing.T
 	registered   string // pubkey hex, "" if none
 	gets, posts  int
@@ -53,7 +55,29 @@ func verify(pubHex, msg, sigHex string) bool {
 	return rsa.VerifyPKCS1v15(pub, crypto.SHA256, h[:], sig) == nil
 }
 
+// seen is what the fake recorded, read under its lock.
+type seen struct {
+	registered  string
+	gets, posts int
+	lastBody    map[string]any
+}
+
+func (f *fakeBackend) snap() seen {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return seen{f.registered, f.gets, f.posts, f.lastBody}
+}
+
+// set changes the fake's behaviour under its lock, between requests.
+func (f *fakeBackend) set(change func(*fakeBackend)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	change(f)
+}
+
 func (f *fakeBackend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	switch {
 	case r.Method == "GET" && r.URL.Path == "/api/v1/users/"+email:
 		f.gets++
@@ -147,10 +171,10 @@ func TestRegisterFirstKey(t *testing.T) {
 	if err != nil || out != keys.Registered {
 		t.Fatalf("got %v, %v", out, err)
 	}
-	if f.backend.registered != f.hex1 {
+	if f.backend.snap().registered != f.hex1 {
 		t.Error("backend didn't register key1")
 	}
-	if _, ok := f.backend.lastBody["sig4rotate"]; ok {
+	if _, ok := f.backend.snap().lastBody["sig4rotate"]; ok {
 		t.Error("first registration sent sig4rotate")
 	}
 }
@@ -165,7 +189,7 @@ func TestRegisterRotates(t *testing.T) {
 	if err != nil || out != keys.Rotated {
 		t.Fatalf("got %v, %v", out, err)
 	}
-	if f.backend.registered != f.hex2 {
+	if f.backend.snap().registered != f.hex2 {
 		t.Error("backend didn't switch to key2")
 	}
 	if !f.key2.Equal(f.load(t, keys.Current)) || f.load(t, keys.Pending) != nil {
@@ -187,7 +211,7 @@ func TestRegisterLostRotationResponseThenPromotes(t *testing.T) {
 	if !errors.As(err, &netErr) {
 		t.Fatalf("want a NetworkError, got %T %v", err, err)
 	}
-	if f.backend.registered != f.hex2 {
+	if f.backend.snap().registered != f.hex2 {
 		t.Fatal("fake backend should have applied the rotation")
 	}
 	if !f.key1.Equal(f.load(t, keys.Current)) || !f.key2.Equal(f.load(t, keys.Pending)) {
@@ -198,13 +222,13 @@ func TestRegisterLostRotationResponseThenPromotes(t *testing.T) {
 		t.Errorf("CheckKey: got %v, %v; want FinishRotation", st, err)
 	}
 
-	f.backend.dropResponse = false
-	posts := f.backend.posts
+	f.backend.set(func(b *fakeBackend) { b.dropResponse = false })
+	posts := f.backend.snap().posts
 	out, err := keys.Register(f.client, f.store, email)
 	if err != nil || out != keys.Promoted {
 		t.Fatalf("got %v, %v", out, err)
 	}
-	if f.backend.posts != posts {
+	if f.backend.snap().posts != posts {
 		t.Error("promoting shouldn't post to keyreg")
 	}
 	if !f.key2.Equal(f.load(t, keys.Current)) {
@@ -221,7 +245,7 @@ func TestRegisterMismatchDoesNothing(t *testing.T) {
 	if !errors.Is(err, keys.ErrKeyMismatch) {
 		t.Fatalf("want ErrKeyMismatch, got %v", err)
 	}
-	if f.backend.posts != 0 {
+	if f.backend.snap().posts != 0 {
 		t.Error("a mismatch shouldn't post to keyreg")
 	}
 }
@@ -232,8 +256,8 @@ func TestRegisterAlreadyRegistered(t *testing.T) {
 	f.save(t, keys.Current, f.key1)
 
 	out, err := keys.Register(f.client, f.store, email)
-	if err != nil || out != keys.AlreadyRegistered || f.backend.posts != 0 {
-		t.Fatalf("got %v, %v, %d posts", out, err, f.backend.posts)
+	if err != nil || out != keys.AlreadyRegistered || f.backend.snap().posts != 0 {
+		t.Fatalf("got %v, %v, %d posts", out, err, f.backend.snap().posts)
 	}
 }
 
@@ -246,8 +270,8 @@ func TestRegister409ReloadsAndRetriesOnce(t *testing.T) {
 	if err != nil || out != keys.Registered {
 		t.Fatalf("got %v, %v", out, err)
 	}
-	if f.backend.gets != 2 || f.backend.posts != 2 {
-		t.Errorf("want 2 GETs and 2 POSTs, got %d and %d", f.backend.gets, f.backend.posts)
+	if f.backend.snap().gets != 2 || f.backend.snap().posts != 2 {
+		t.Errorf("want 2 GETs and 2 POSTs, got %d and %d", f.backend.snap().gets, f.backend.snap().posts)
 	}
 }
 
@@ -257,8 +281,8 @@ func TestRegister409TwiceGivesUp(t *testing.T) {
 	f.save(t, keys.Current, f.key1)
 
 	_, err := keys.Register(f.client, f.store, email)
-	if api.StatusOf(err) != 409 || f.backend.posts != 2 {
-		t.Fatalf("want a 409 after 2 posts, got %v after %d", err, f.backend.posts)
+	if api.StatusOf(err) != 409 || f.backend.snap().posts != 2 {
+		t.Fatalf("want a 409 after 2 posts, got %v after %d", err, f.backend.snap().posts)
 	}
 }
 
@@ -298,7 +322,7 @@ func TestCheckKey(t *testing.T) {
 			if err != nil || st != tc.want {
 				t.Errorf("got %v, %v; want %v", st, err, tc.want)
 			}
-			if f.backend.posts != 0 {
+			if f.backend.snap().posts != 0 {
 				t.Error("CheckKey must not change anything")
 			}
 		})

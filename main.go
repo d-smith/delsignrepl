@@ -7,68 +7,54 @@ import (
 	"delsignrepl/token"
 	"delsignrepl/ui"
 	"delsignrepl/wallets"
+	"time"
 
-	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
-var appToken string
+// buildShell lays out the app: the sidebar holds the actions, their screens open in the
+// content area, and the header and Home show the session (plan/03). It starts on the
+// login page; Esc from there goes Home.
+func buildShell(app *tview.Application) *ui.Shell {
+	sh := ui.NewShell(app)
+	sh.Token = func() string { return state.Token }
+	sh.SetHeaderFunc(state.HeaderText)
+	sh.SetHomeFunc(state.HomeText)
 
-func getMainList(pages *tview.Pages, app *tview.Application) *tview.List {
-	menuList := tview.NewList().
-		AddItem("Generate key", "Generate a signing key, or a replacement for the current one", 'k', nil).
-		AddItem("Register key", "Register the signing key, or switch to a replacement", 'r', nil).
-		AddItem("Key status", "Check that this machine's key is the registered one", 'i', nil).
-		AddItem("Create wallet", "Create a wallet", 'w', nil).
-		AddItem("Generate address", "Generate an address for a wallet", 'a', nil).
-		AddItem("Set wallet/address context", "Set wallet/address context", 'c', nil).
-		AddItem("Get balance", "Get balance for current wallet", 'b', nil).
-		AddItem("Send ETH", "Send ETH from current wallet", 's', nil).
-		AddItem("Log in again", "Enter a new token", 't', nil).
-		AddItem("Quit", "Exit", 'q', nil)
+	sh.AddAction("Keys", 'k', func() { keys.ShowKeys(sh) }).
+		AddAction("Wallets", 'w', func() { wallets.ShowWallets(sh) }).
+		AddAction("Get balance", 'b', func() { wallets.DoGetBalance(sh) }).
+		AddAction("Send ETH", 's', func() { send.ShowSendForm(sh) }).
+		AddAction("Activity", 'a', sh.ShowActivity).
+		AddAction("Refresh", 'R', func() { refresh(sh) }).
+		AddAction("Help", '?', func() { sh.Show(ui.HelpPage, nil) }).
+		AddAction("Log in again", 't', func() { sh.Show(ui.LoginPage, nil) }).
+		AddAction("Quit", 'q', app.Stop)
 
-	menuList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Rune() == 'k' {
-			keys.DoKeyGeneration(pages)
-		} else if event.Rune() == 'r' {
-			keys.DoKeyRegistration(pages, appToken)
-		} else if event.Rune() == 'i' {
-			keys.DoKeyStatus(pages, appToken)
-		} else if event.Rune() == 't' {
-			pages.SwitchToPage(ui.LoginPage)
-		} else if event.Rune() == 'q' {
-			app.Stop()
-		} else if event.Rune() == 'w' {
-			wallets.DoWalletGeneration(pages, appToken)
-		} else if event.Rune() == 'a' {
-			wallets.DoAddressGeneration(pages, appToken)
-		} else if event.Rune() == 'c' {
-			state.DoSetWalletAndAccountCtx(pages, appToken)
-		} else if event.Rune() == 'b' {
-			wallets.DoGetBalance(pages, state.WalletId, state.Address, appToken)
-		} else if event.Rune() == 's' {
-			send.ShowSendForm(pages, appToken)
-		}
-		return event
-	})
+	onLogin := func(email string) { keys.OnLogin(sh, email) }
+	sh.Show(ui.LoginPage, token.GetTokenInputForm(sh, &state.Token, onLogin))
+	return sh
+}
 
-	return menuList
+// refresh checks the key and fetches the balance again, for the header and Home.
+func refresh(sh *ui.Shell) {
+	if state.Email == "" {
+		sh.Message("Log in first (t).")
+		return
+	}
+	if _, err := keys.RefreshKeyStatus(state.Token); err != nil {
+		sh.Error("Error checking your key", err)
+		return
+	}
+	if err := wallets.RefreshBalance(state.Token); err != nil {
+		sh.Error("Error retrieving balance", err)
+		return
+	}
+	sh.Status("Refreshed at " + time.Now().Format("15:04:05"))
 }
 
 func main() {
-
-	app := tview.NewApplication()
-
-	var pages = tview.NewPages()
-
-	list := getMainList(pages, app) //.SetBorder(true).SetTitle("Main list").SetTitleAlign(tview.AlignLeft)
-
-	pages.AddPage("Menu", list, true, true)
-	onLogin := func(email string) { keys.OnLogin(pages, email, appToken) }
-	pages.AddPage(ui.LoginPage, token.GetTokenInputForm(pages, app, &appToken, onLogin), true, true)
-
-	if err := app.SetRoot(pages, true).SetFocus(pages).EnableMouse(true).Run(); err != nil {
+	if err := buildShell(tview.NewApplication()).Run(); err != nil {
 		panic(err)
 	}
-
 }

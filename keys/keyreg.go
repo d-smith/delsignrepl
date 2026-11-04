@@ -34,7 +34,7 @@ func BuildKeyReg(email string, next, current *rsa.PrivateKey) (api.KeyReg, error
 
 // Errors from Register that need the user to act.
 var (
-	ErrNoKey       = errors.New("there's no key on this machine for this email. Generate one first (k)")
+	ErrNoKey       = errors.New("there's no key on this machine for this email. Generate one first")
 	ErrKeyMismatch = errors.New("this machine's key isn't the one registered with the backend, so sends will be rejected. " +
 		"There's no way to replace it without the registered key: ask the backend owner to reset the account")
 )
@@ -152,15 +152,15 @@ const (
 func (st Status) String() string {
 	switch st {
 	case NoLocalKey:
-		return "No signing key on this machine for this email. Generate one (k), then register it (r)."
+		return "No signing key on this machine for this email. Generate one, then register it."
 	case NotRegistered:
-		return "Your key isn't registered yet. Register it (r)."
+		return "Your key isn't registered yet. Register it."
 	case Matches:
 		return "Your key is registered and matches this machine's key."
 	case PendingReady:
-		return "Your key is registered. A replacement key is waiting: register it (r) to switch to it."
+		return "Your key is registered. A replacement key is waiting: register it to switch to it."
 	case FinishRotation:
-		return "A key replacement went through but wasn't recorded here. Register (r) to finish it."
+		return "A key replacement went through but wasn't recorded here. Register again to finish it."
 	case Mismatch:
 		return ErrKeyMismatch.Error() + "."
 	}

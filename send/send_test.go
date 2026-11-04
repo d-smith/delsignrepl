@@ -39,3 +39,18 @@ func TestValidateSend(t *testing.T) {
 		t.Error("empty source accepted")
 	}
 }
+
+func TestAmountPreview(t *testing.T) {
+	for in, want := range map[string]string{
+		"":                      "",
+		"1":                     "= 0.000000000000000001 ETH",
+		"1000000000000000":      "= 0.001 ETH",
+		"0":                     "= 0 ETH (the amount must be more than 0)",
+		"007":                   "no leading zeros, please",
+		strings.Repeat("9", 78): "more than the largest amount (2^256-1 wei)",
+	} {
+		if got := amountPreview(in); got != want {
+			t.Errorf("amountPreview(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

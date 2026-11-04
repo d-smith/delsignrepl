@@ -58,21 +58,22 @@ Never commit the JWT secret. To check the backend is reachable:
 
 ### Dev tokens (cheat code)
 
-The app logs in with a JWT. It reads the email from the token and checks the token with
-the backend's `GET /authping` before accepting it. With a token from the backend owner,
-paste it into **Token value** and press **Save**.
+The app starts on the login page. It logs in with a JWT: it reads the email from the
+token and checks the token with the backend's `GET /authping` before accepting it. With
+a token from the backend owner, paste it into **Token** and press **Save**.
 
 For development, the app can make its own token instead:
 
-1. Set `DELSIGN_DEV_JWT_SECRET` to the backend's `DELSIGN_JWT_SECRET`. The **Apply Cheat
-   Code** checkbox only appears when it's set.
-2. Type your email into **Token value**.
-3. Tick **Apply Cheat Code**. The email is replaced by a token signed with the secret,
-   valid for 8 hours.
+1. Set `DELSIGN_DEV_JWT_SECRET` to the backend's `DELSIGN_JWT_SECRET`. The **Email**
+   field and the **Apply Cheat Code** button only appear when it's set.
+2. Type your email into **Email**.
+3. Press **Apply Cheat Code**. It puts a token for that email, signed with the secret and
+   valid for 8 hours, into **Token**. Editing the email afterwards clears it.
 4. Press **Save**.
 
-When the token expires, choose **Log in again** (`t`) from the menu. A login that fails
-with a 403 usually means the secret doesn't match the backend's.
+After logging in you land on Home. When the token expires, choose **Log in again** (`t`)
+from the menu. A login that fails with a 403 usually means the secret doesn't match the
+backend's.
 
 ### Key files
 
@@ -89,8 +90,9 @@ file that group or others can read, and tells you to `chmod 600` it.
 
 There are two ways to get a key:
 
-- **In the app:** **Generate key** (`k`), then **Register key** (`r`).
-- **With openssl**, then **Register key** in the app:
+- **In the app:** open **Keys** (`k`), press `g` to generate a key, then `r` to
+  register it.
+- **With openssl**, then `r` on the Keys screen:
 
   ```sh
   mkdir -p .delsign/keys/you@example.com
@@ -102,27 +104,58 @@ There are two ways to get a key:
 There's no way to download a key from the backend. **If you lose the key file, the funds
 in your addresses are locked** until the backend owner resets your account.
 
-**Key status** (`i`) checks that this machine's key is the registered one. To replace
-your key, choose **Generate key** again: it saves the new key as `pending` and never
-overwrites the current one. **Register key** then switches the backend over, signing the
-change with the current key, and makes the new key current. If that response is lost,
-running **Register key** again finishes the switch.
+The Keys screen shows whether this machine's key is the registered one, when that was
+last checked (`R` checks again), and the paths of both key files. To replace your key,
+press `g` again: it saves the new key as `pending` and never overwrites the current one.
+`r` then switches the backend over, signing the change with the current key, and makes
+the new key current. If that response is lost, pressing `r` again finishes the switch.
 
 ### Using the app
 
+The screen has four parts:
+
+- **Header:** who you're logged in as, the key status, and the wallet, address and
+  balance that Send uses. It's always up to date.
+- **Menu** on the left, with a shortcut key for each item.
+- **Content:** the open screen. Home shows the session in full and the next step to take.
+- **Footer:** the last message, then the key hints.
+
+Menu shortcuts work on Home. Elsewhere, **Esc** goes back (closing a dialog first), and
+**Esc** from any screen eventually gets you Home. **Tab** moves between fields and
+buttons, **Enter** selects, and **?** shows all the keys.
+
+A first session:
+
 1. Log in (see Dev tokens).
-2. **Generate key** (`k`) and **Register key** (`r`), once per email.
-3. **Create wallet** (`w`), then **Generate address** (`a`) and pick the wallet ID.
-4. **Set wallet/address context** (`c`). Balance and Send use this pair.
-5. Fund the address from Anvil (below), then **Get balance** (`b`).
-6. **Send ETH** (`s`): the amount is in wei (`1000000000000000` is 0.001 ETH). A
-   confirmation shows the amount in wei and ETH before anything is signed.
+2. **Keys** (`k`): `g` generates a key, `r` registers it. Once per email.
+3. **Wallets** (`w`): `n` creates a wallet, `a` adds an address to the selected wallet,
+   and **Enter** makes the selected address the one Balance and Send use (marked `*`).
+4. Fund the address from Anvil (below), then **Refresh** (`R`) on Home, or
+   **Get balance** (`b`).
+5. **Send ETH** (`s`): the amount is in wei, with its value in ETH shown as you type
+   (`1000000000000000` is 0.001 ETH). **Pick from my addresses** fills in the
+   destination from your other addresses. A confirmation shows the amount in wei and ETH
+   before anything is signed.
+6. **Activity** (`a`): this session's wallets, addresses, key changes and every send
+   attempt, newest first. **Enter** shows an entry in full: from, to, amount, request
+   id, outcome and txnid. The log is kept in memory only.
 
 If a send gets no response, the transfer may or may not have happened. **Retry same
 request** resends the identical request, and is offered only until the request expires
 (2 minutes). Otherwise, check the balance before sending again.
 
-To copy text such as an address, hold **Shift** while selecting with the mouse.
+### Copy and paste
+
+- **`c`** copies the selected address on Wallets, or the selected entry's txnid (or
+  address, wallet ID, key path) on Activity. After a send, **Copy txnid** does the same.
+  The app copies through the terminal (OSC 52, which Windows Terminal, iTerm2, kitty
+  and others support) and with `clip.exe`, `pbcopy`, `wl-copy`, `xclip` or `xsel` if one
+  is installed. The footer says what it copied.
+- **F2** turns the mouse off, so you can drag to select any text on screen and copy it
+  with your terminal (Ctrl+Shift+C in most). F2 again turns it back on. With the mouse
+  on, hold **Shift** while dragging instead.
+- **Paste** into a field with your terminal's paste (Ctrl+Shift+V in most).
+  Spaces and newlines around pasted text are dropped, so a copied line pastes cleanly.
 
 ### Dev chain (Anvil)
 
@@ -140,7 +173,7 @@ cast send 0xYourAddress --value 0.01ether --private-key <Anvil account private k
 cast balance 0xYourAddress
 cast balance --ether 0xYourAddress
 
-# look up a send, using the transaction ID the app shows
+# look up a send: c on its Activity entry copies the txnid
 cast receipt <txnid>
 ```
 
