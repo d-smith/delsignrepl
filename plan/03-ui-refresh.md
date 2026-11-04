@@ -338,6 +338,20 @@ Global keys go in `app.SetInputCapture`:
      under `-race`.
 6. **Readme.** Update "Using the app" and the key hints. Note that mouse off means plain selection.
 
+   Result (2026-11-04):
+   - **Dev tokens:** the Token field, and the Email field and Apply Cheat Code button
+     (replacing the checkbox and "Token value"); login lands on Home.
+   - **Key files:** the Keys screen's `g`, `r` and `R` replace Generate key, Register key
+     and Key status.
+   - **Using the app** rewritten: the header, menu, content and footer; Esc, Tab, Enter
+     and `?`; a first session through Keys, Wallets (`n`, `a`, Enter), funding and
+     `R`, Send (live ETH preview, Pick from my addresses) and Activity.
+   - **Copy and paste** (new): `c` and Copy txnid, OSC 52 plus the clipboard command,
+     F2 for plain drag-selection, and trimmed paste.
+   - The Anvil section's `cast receipt` points to copying the txnid from Activity.
+   - Checked that no old menu names or keys are left, and the readme is ASCII only.
+
+
 ## Critical files
 
 - **New:** `ui/shell.go`, `ui/activity.go`, `ui/clipboard.go`, and a help text.
