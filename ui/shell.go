@@ -93,6 +93,17 @@ func (s *Shell) AddAction(label string, key rune, do func()) *Shell {
 	return s
 }
 
+// HighlightAction moves the sidebar's highlight to the item labelled label, without
+// running it. It does nothing if there's no such item.
+func (s *Shell) HighlightAction(label string) {
+	for i := 0; i < s.Sidebar.GetItemCount(); i++ {
+		if main, _ := s.Sidebar.GetItemText(i); main == label {
+			s.Sidebar.SetCurrentItem(i)
+			return
+		}
+	}
+}
+
 // SetHome sets the Home screen's content.
 func (s *Shell) SetHome(p tview.Primitive) {
 	s.Content.AddPage(HomePage, p, true, s.front() == "" || s.front() == HomePage)

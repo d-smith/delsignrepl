@@ -47,7 +47,7 @@ func describeErr(err error, ping func() error) (msg string, tokenProblem bool) {
 		pingErr := ping()
 		switch {
 		case api.StatusOf(pingErr) == 403:
-			return "Your session has expired or the token is invalid. Log in again with a new token (t).", true
+			return "Your session has expired or the token is invalid. Log in again with a new token (l).", true
 		case pingErr != nil:
 			return "Not permitted: " + textOr(e, "forbidden") +
 				fmt.Sprintf(" (couldn't check the token: %v)", pingErr), false

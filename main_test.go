@@ -61,6 +61,9 @@ func TestAppStartsOnLoginInsideShell(t *testing.T) {
 	if sh.Current() != ui.LoginPage || sim.App.GetFocus() == sh.Sidebar {
 		t.Fatal("the login page should be open and focused at start")
 	}
+	if main, _ := sh.Sidebar.GetItemText(sh.Sidebar.GetCurrentItem()); main != "Log in again" {
+		t.Errorf("at start the menu highlights %q, want the login item", main)
+	}
 
 	sim.Key(tcell.KeyEscape)
 	if sh.Current() != ui.HomePage || sim.App.GetFocus() != sh.Sidebar {
@@ -70,7 +73,7 @@ func TestAppStartsOnLoginInsideShell(t *testing.T) {
 	sim.Type("k") // Keys, before logging in
 	sim.Shows("Log in first")
 	sim.Key(tcell.KeyEnter)
-	sim.Shows("Next: log in (t).")
+	sim.Shows("Next: log in (l).")
 	if sim.App.GetFocus() != sh.Sidebar {
 		t.Error("OK on the modal should return to Home and the sidebar")
 	}
@@ -98,7 +101,7 @@ func TestEscFromEveryScreen(t *testing.T) {
 		{"w", wallets.WalletsPage, "n new wallet"},
 		{"s", send.SendPage, "Amount (wei):"},
 		{"?", ui.HelpPage, "Esc               back"},
-		{"t", ui.LoginPage, "Log in with a JWT"},
+		{"l", ui.LoginPage, "Log in with a JWT"},
 	} {
 		sim.Type(c.key)
 		sim.Shows(c.shows)
@@ -163,6 +166,9 @@ func TestHeaderAndHomeShowTheSession(t *testing.T) {
 	sim.Key(tcell.KeyEnter) // log in: Home, no modal
 	if sh.Current() != ui.HomePage || sim.App.GetFocus() != sh.Sidebar {
 		t.Fatalf("after login, on %q", sh.Current())
+	}
+	if main, _ := sh.Sidebar.GetItemText(sh.Sidebar.GetCurrentItem()); main != "Keys" {
+		t.Errorf("after login the menu highlights %q, want Keys", main)
 	}
 	sim.Shows(testEmail+"  |  key: none on this machine  |  no wallet context",
 		"Next: open Keys (k), generate a signing key (g)", "Logged in as "+testEmail)

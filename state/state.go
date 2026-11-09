@@ -64,7 +64,7 @@ func ShortAddress(a string) string {
 // HeaderText is the one-line summary in the header.
 func HeaderText() string {
 	if Email == "" {
-		return "Not logged in. Log in again (t)."
+		return "Not logged in. Log in again (l)."
 	}
 	parts := []string{Email, "key: " + orDash(KeyStatus)}
 	if Address == "" {
@@ -92,7 +92,7 @@ func HomeText() string {
 	b.WriteString("\n")
 	if Email == "" {
 		line("Signed in", "no")
-		b.WriteString("\n  Next: log in (t).\n")
+		b.WriteString("\n  Next: log in (l).\n")
 		return b.String()
 	}
 	line("Signed in", Email)
@@ -125,7 +125,7 @@ func HomeText() string {
 func NextStep() string {
 	switch {
 	case Email == "":
-		return "log in (t)."
+		return "log in (l)."
 	case KeyNext != "":
 		return KeyNext
 	case Address == "":

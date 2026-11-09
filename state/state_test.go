@@ -34,7 +34,7 @@ func TestHeaderAndHomeFollowTheSession(t *testing.T) {
 	if h := HeaderText(); !strings.Contains(h, "Not logged in") {
 		t.Errorf("logged out header: %q", h)
 	}
-	if n := NextStep(); !strings.Contains(n, "log in (t)") {
+	if n := NextStep(); !strings.Contains(n, "log in (l)") {
 		t.Errorf("logged out next: %q", n)
 	}
 
