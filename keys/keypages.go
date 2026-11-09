@@ -51,7 +51,7 @@ func OnLogin(sh *ui.Shell, email string) {
 // r and R) to generate, register and check again. It checks the key on opening.
 func ShowKeys(sh *ui.Shell) {
 	if state.Email == "" {
-		sh.Message("Log in first (t).")
+		sh.Message("Log in first (l).")
 		return
 	}
 	info := ui.NewLiveText(keysText)
@@ -137,7 +137,7 @@ func keyFile(s Store, name string) string {
 // pending replacement. It never overwrites the current key.
 func DoKeyGeneration(sh *ui.Shell) {
 	if state.Email == "" {
-		sh.Message("Log in first (t).")
+		sh.Message("Log in first (l).")
 		return
 	}
 	s := StoreFromEnv()
@@ -201,7 +201,7 @@ func DoKeyGeneration(sh *ui.Shell) {
 // DoKeyRegistration registers the key, or rotates to a pending replacement (plan D2).
 func DoKeyRegistration(sh *ui.Shell) {
 	if state.Email == "" {
-		sh.Message("Log in first (t).")
+		sh.Message("Log in first (l).")
 		return
 	}
 	s := StoreFromEnv()

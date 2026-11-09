@@ -71,7 +71,7 @@ For development, the app can make its own token instead:
    valid for 8 hours, into **Token**. Editing the email afterwards clears it.
 4. Press **Save**.
 
-After logging in you land on Home. When the token expires, choose **Log in again** (`t`)
+After logging in you land on Home. When the token expires, choose **Log in again** (`l`)
 from the menu. A login that fails with a 403 usually means the secret doesn't match the
 backend's.
 
